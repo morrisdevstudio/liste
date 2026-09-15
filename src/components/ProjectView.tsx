@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useStore } from '../store/useStore';
-import { ArrowLeft, Upload, Plus, Download, FileText, Search, Trash2, Minus, ChevronLeft, ChevronRight, Menu, Settings, ArrowUpDown, Calendar, ClipboardList, Sliders } from 'lucide-react';
+import { ArrowLeft, Upload, Plus, Download, FileText, Search, Trash2, Minus, ChevronLeft, ChevronRight, Menu, Settings, ArrowUpDown, Calendar, ClipboardList, Sliders, MoreHorizontal, HelpCircle, Keyboard, X } from 'lucide-react';
 import { ProjectSettingsModal } from './ProjectSettingsModal';
 import { Category, ComponentRef, Project } from '../types';
 import * as XLSX from 'xlsx';
@@ -8,10 +8,28 @@ import { ExportService } from '../services/ExportService';
 
 const VIEWS = ['Globale', 'Tôlerie', 'Électronique', 'Appro Anticipé'];
 
-function EditableQuantity({ value, onSave }: { value: number, onSave: (val: number) => void }) {
+function EditableQuantity({
+  value,
+  onSave,
+  isTriggerAdd,
+  onModeConsumed
+}: {
+  value: number;
+  onSave: (val: number) => void;
+  isTriggerAdd?: boolean;
+  onModeConsumed?: () => void;
+}) {
   const [mode, setMode] = useState<'view' | 'edit-abs' | 'edit-add' | 'edit-sub'>('view');
   const [tempValue, setTempValue] = useState<number | ''>('');
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isTriggerAdd) {
+      setTempValue('');
+      setMode('edit-add');
+      onModeConsumed?.();
+    }
+  }, [isTriggerAdd, onModeConsumed]);
 
   useEffect(() => {
     if (mode !== 'view' && inputRef.current) {
@@ -160,8 +178,17 @@ function EditableReference({ value, onSave, suggestedRefs }: { value: string, on
 type ColumnId = 'ref' | 'designation' | 'quantity' | 'status' | 'manufacturer' | 'fabCode' | 'listsInfo';
 
 export function ProjectView() {
-  const { currentProjectId, currentProject, closeProject, bomLines, manufacturers, addOrUpdateBOMLine, removeBOMLine, updateBOMLineQte, updateBOMLineRef, importBOMData, sublists, addSublist, removeSublist, currentProjectPath } = useStore();
+  const { currentProjectId, currentProject, closeProject, bomLines, manufacturers, addOrUpdateBOMLine, removeBOMLine, removeZeroQuantityLines, updateBOMLineQte, updateBOMLineRef, importBOMData, sublists, addSublist, removeSublist, currentProjectPath } = useStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const newRefInputRef = useRef<HTMLInputElement>(null);
+  const actionsMenuRef = useRef<HTMLDivElement>(null);
+
+  const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
+  const [activeAddQtyLineId, setActiveAddQtyLineId] = useState<string | null>(null);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [showDeleteZeroModal, setShowDeleteZeroModal] = useState(false);
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
 
   const [activeView, setActiveView] = useState('Globale');
   const projectSublists = useMemo(() => {
@@ -208,12 +235,21 @@ export function ProjectView() {
       if (colDropdownRef.current && !colDropdownRef.current.contains(event.target as Node)) {
         setShowColDropdown(false);
       }
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target as Node)) {
+        setShowActionsMenu(false);
+      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  useEffect(() => {
+    setSelectedLineId(null);
+    setActiveAddQtyLineId(null);
+    setShowActionsMenu(false);
+  }, [activeView]);
 
   const resizingColumnRef = useRef<{ id: ColumnId; startX: number; startWidth: number } | null>(null);
 
@@ -296,6 +332,19 @@ export function ProjectView() {
   }, [newRef]);
 
   const project = currentProject;
+
+  const zeroQtyLinesCount = useMemo(() => {
+    if (!currentProjectId || activeView === 'Globale' || activeView === 'EtatPrepa') return 0;
+    return bomLines.filter(l => l.projectId === currentProjectId && l.sublistId === activeView && l.quantity <= 0).length;
+  }, [bomLines, currentProjectId, activeView]);
+
+  const handleTriggerDeleteZero = () => {
+    if (zeroQtyLinesCount === 0) {
+      alert("Aucune référence avec une quantité de 0 trouvée dans cette liste.");
+      return;
+    }
+    setShowDeleteZeroModal(true);
+  };
 
   const viewLines = useMemo(() => {
     let filtered = bomLines.filter(l => l.projectId === currentProjectId);
@@ -398,6 +447,166 @@ export function ProjectView() {
       }
     });
   }, [bomLines, currentProjectId, activeView, searchTerm, refDetails, manufacturers, sortBy]);
+
+  // Gestion des raccourcis clavier
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isEditing = target && (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable
+      );
+
+      if (e.key === 'Escape') {
+        if (showShortcutsModal) {
+          setShowShortcutsModal(false);
+          return;
+        }
+        if (showDeleteZeroModal) {
+          setShowDeleteZeroModal(false);
+          return;
+        }
+        if (showActionsMenu) {
+          setShowActionsMenu(false);
+          return;
+        }
+        if (showColDropdown) {
+          setShowColDropdown(false);
+          return;
+        }
+        if (isEditing) {
+          target.blur();
+          return;
+        }
+        if (selectedLineId) {
+          setSelectedLineId(null);
+          return;
+        }
+      }
+
+      if (isEditing) return;
+
+      // A : Focus sur l'ajout d'une nouvelle référence
+      if (e.key === 'a' || e.key === 'A') {
+        if (activeView !== 'Globale' && activeView !== 'EtatPrepa' && activeView !== 'Chiffrage') {
+          e.preventDefault();
+          newRefInputRef.current?.focus();
+          newRefInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+        return;
+      }
+
+      // E : Ajouter une quantité à la référence sélectionnée
+      if (e.key === 'e' || e.key === 'E') {
+        if (selectedLineId && activeView !== 'Globale' && activeView !== 'EtatPrepa' && activeView !== 'Chiffrage') {
+          e.preventDefault();
+          setActiveAddQtyLineId(selectedLineId);
+        }
+        return;
+      }
+
+      // T : Changer la méthode de tri
+      if (e.key === 't' || e.key === 'T') {
+        e.preventDefault();
+        setSortBy(prev => {
+          if (activeView === 'EtatPrepa') {
+            if (prev === 'ref_fab') return 'date';
+            if (prev === 'date') return 'status';
+            return 'ref_fab';
+          } else {
+            return prev === 'ref_fab' ? 'date' : 'ref_fab';
+          }
+        });
+        return;
+      }
+
+      // Flèche Bas : Sélectionner la référence suivante
+      if (e.key === 'ArrowDown') {
+        if (viewLines.length === 0) return;
+        e.preventDefault();
+        const currentIndex = selectedLineId ? viewLines.findIndex(l => l.id === selectedLineId) : -1;
+        const nextIndex = currentIndex === -1 ? 0 : Math.min(viewLines.length - 1, currentIndex + 1);
+        const nextLine = viewLines[nextIndex];
+        setSelectedLineId(nextLine.id);
+        document.getElementById(`bom-row-${nextLine.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        return;
+      }
+
+      // Flèche Haut : Sélectionner la référence précédente
+      if (e.key === 'ArrowUp') {
+        if (viewLines.length === 0) return;
+        e.preventDefault();
+        const currentIndex = selectedLineId ? viewLines.findIndex(l => l.id === selectedLineId) : -1;
+        const prevIndex = currentIndex === -1 ? viewLines.length - 1 : Math.max(0, currentIndex - 1);
+        const prevLine = viewLines[prevIndex];
+        setSelectedLineId(prevLine.id);
+        document.getElementById(`bom-row-${prevLine.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        return;
+      }
+
+      // + / = : Incrémenter la quantité (+1)
+      if (e.key === '+' || e.key === '=') {
+        if (selectedLineId && activeView !== 'Globale' && activeView !== 'EtatPrepa' && activeView !== 'Chiffrage') {
+          const line = viewLines.find(l => l.id === selectedLineId);
+          if (line) {
+            e.preventDefault();
+            updateBOMLineQte(line.id, line.quantity + 1);
+          }
+        }
+        return;
+      }
+
+      // - : Décrémenter la quantité (-1)
+      if (e.key === '-') {
+        if (selectedLineId && activeView !== 'Globale' && activeView !== 'EtatPrepa' && activeView !== 'Chiffrage') {
+          const line = viewLines.find(l => l.id === selectedLineId);
+          if (line) {
+            e.preventDefault();
+            updateBOMLineQte(line.id, Math.max(0, line.quantity - 1));
+          }
+        }
+        return;
+      }
+
+      // Suppr / Backspace : Supprimer la ligne sélectionnée
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedLineId && activeView !== 'Globale' && activeView !== 'EtatPrepa' && activeView !== 'Chiffrage') {
+          e.preventDefault();
+          const currentIndex = viewLines.findIndex(l => l.id === selectedLineId);
+          removeBOMLine(selectedLineId);
+          if (viewLines.length > 1) {
+            const nextIndex = currentIndex < viewLines.length - 1 ? currentIndex + 1 : currentIndex - 1;
+            setSelectedLineId(viewLines[nextIndex].id);
+          } else {
+            setSelectedLineId(null);
+          }
+        }
+        return;
+      }
+
+      // / : Focus recherche
+      if (e.key === '/') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+        return;
+      }
+
+      // ? : Afficher l'aide des raccourcis
+      if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+        e.preventDefault();
+        setShowShortcutsModal(prev => !prev);
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, [viewLines, selectedLineId, activeView, showShortcutsModal, showDeleteZeroModal, showActionsMenu, showColDropdown, updateBOMLineQte, removeBOMLine]);
 
   interface ImportConfig {
     sheetIndex: number;
@@ -841,8 +1050,9 @@ export function ProjectView() {
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
+                  ref={searchInputRef}
                   type="text"
-                  placeholder="Rechercher une réf..."
+                  placeholder="Rechercher une réf... (/)"
                   className="pl-9 pr-4 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
@@ -935,6 +1145,45 @@ export function ProjectView() {
                   </div>
                 )}
               </div>
+
+              {/* Actions supplémentaires (...) */}
+              {activeView !== 'Globale' && activeView !== 'EtatPrepa' && (
+                <div className="relative" ref={actionsMenuRef}>
+                  <button
+                    onClick={() => setShowActionsMenu(!showActionsMenu)}
+                    className="px-3 py-2 border border-slate-300 rounded-md text-sm font-medium hover:bg-slate-50 flex items-center gap-1.5 transition-colors bg-white text-slate-700 shadow-sm"
+                    title="Actions supplémentaires"
+                  >
+                    <MoreHorizontal className="w-4 h-4 text-slate-500" />
+                    <span className="hidden sm:inline">Actions</span>
+                  </button>
+
+                  {showActionsMenu && (
+                    <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-xl z-30 p-2 animate-in fade-in slide-in-from-top-2 duration-150">
+                      <button
+                        onClick={() => {
+                          setShowActionsMenu(false);
+                          handleTriggerDeleteZero();
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors text-left font-medium"
+                      >
+                        <Trash2 className="w-4 h-4 shrink-0 text-red-500" />
+                        <span>Supprimer les références à 0</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Bouton Aide raccourcis clavier */}
+              <button
+                onClick={() => setShowShortcutsModal(true)}
+                className="px-3 py-2 border border-slate-300 rounded-md text-sm font-medium hover:bg-slate-50 flex items-center gap-1.5 transition-colors bg-white text-slate-700 shadow-sm"
+                title="Raccourcis clavier (?)"
+              >
+                <HelpCircle className="w-4 h-4 text-slate-500" />
+                <span className="hidden sm:inline">Raccourcis</span>
+              </button>
             </div>
           </div>
 
@@ -945,7 +1194,7 @@ export function ProjectView() {
                 className="min-w-full divide-y divide-slate-200 relative"
                 style={{
                   tableLayout: 'fixed',
-                  width: Object.entries(columns).reduce((acc, [id, col]) => acc + (col.visible ? col.width : 0), 0) + (activeView !== 'Globale' && activeView !== 'EtatPrepa' ? 64 : 0)
+                  width: (Object.values(columns) as { visible: boolean; width: number }[]).reduce((acc, col) => acc + (col.visible ? col.width : 0), 0) + (activeView !== 'Globale' && activeView !== 'EtatPrepa' ? 64 : 0)
                 }}
               >
                 <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm">
@@ -1039,10 +1288,19 @@ export function ProjectView() {
                     </tr>
                   ) : viewLines.map((line) => {
                     const isFullyOrdered = activeView === 'EtatPrepa' && line.orderedQty === line.quantity;
+                    const isSelected = selectedLineId === line.id;
                     return (
-                      <tr 
-                        key={line.id} 
-                        className={`hover:bg-slate-100/50 transition-colors group ${isFullyOrdered ? 'bg-slate-100/70 text-slate-900' : ''}`}
+                      <tr
+                        key={line.id}
+                        id={`bom-row-${line.id}`}
+                        onClick={() => setSelectedLineId(line.id)}
+                        className={`transition-colors group cursor-pointer ${
+                          isSelected
+                            ? 'bg-blue-100/90 ring-2 ring-inset ring-blue-500 text-slate-900'
+                            : isFullyOrdered
+                              ? 'bg-slate-100/70 text-slate-900 hover:bg-slate-100'
+                              : 'hover:bg-slate-100/50 text-slate-900'
+                        }`}
                       >
                         {columns.ref.visible && (
                           <td className="px-6 py-2.5 whitespace-nowrap text-sm font-bold text-slate-900 truncate" style={{ width: columns.ref.width, minWidth: columns.ref.width, maxWidth: columns.ref.width }} title={line.ref}>
@@ -1063,13 +1321,15 @@ export function ProjectView() {
                           </td>
                         )}
                         {columns.quantity.visible && (
-                          <td className={`px-6 py-2.5 whitespace-nowrap text-sm text-center font-medium ${isFullyOrdered ? 'bg-blue-50/10 text-slate-900' : 'bg-blue-50/50 text-slate-900'}`} style={{ width: columns.quantity.width, minWidth: columns.quantity.width, maxWidth: columns.quantity.width }}>
+                          <td className={`px-6 py-2.5 whitespace-nowrap text-sm text-center font-medium ${isSelected ? 'bg-transparent text-slate-900' : isFullyOrdered ? 'bg-blue-50/10 text-slate-900' : 'bg-blue-50/50 text-slate-900'}`} style={{ width: columns.quantity.width, minWidth: columns.quantity.width, maxWidth: columns.quantity.width }}>
                             {activeView === 'Globale' || activeView === 'EtatPrepa' || activeView === 'Chiffrage' ? (
                               line.quantity
                             ) : (
                               <EditableQuantity
                                 value={line.quantity}
                                 onSave={(newQty) => updateBOMLineQte(line.id, newQty)}
+                                isTriggerAdd={activeAddQtyLineId === line.id}
+                                onModeConsumed={() => setActiveAddQtyLineId(null)}
                               />
                             )}
                           </td>
@@ -1131,8 +1391,9 @@ export function ProjectView() {
                       {columns.ref.visible && (
                         <td className="px-6 py-2.5 whitespace-nowrap text-sm" style={{ width: columns.ref.width, minWidth: columns.ref.width, maxWidth: columns.ref.width }}>
                           <input
+                            ref={newRefInputRef}
                             type="text"
-                            placeholder="Nouvelle réf..."
+                            placeholder="Nouvelle réf... (A)"
                             list="refs"
                             className="w-full px-2 py-1.5 border border-slate-300 bg-white rounded-md text-sm"
                             value={newRef}
@@ -1462,6 +1723,107 @@ export function ProjectView() {
                     className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm transition-colors shadow-sm"
                   >
                     Supprimer
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modale de confirmation : Supprimer références à 0 */}
+          {showDeleteZeroModal && (
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
+                <div className="p-6">
+                  <h3 className="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
+                    <Trash2 className="w-5 h-5 text-red-500" />
+                    Supprimer les références à 0
+                  </h3>
+                  <p className="text-slate-600 text-sm">
+                    Êtes-vous sûr de vouloir supprimer les <strong>{zeroQtyLinesCount}</strong> référence{zeroQtyLinesCount > 1 ? 's' : ''} avec une quantité de 0 de la liste <strong>{projectSublists.find(s => s.id === activeView)?.name || activeView}</strong> ?
+                  </p>
+                  <p className="text-xs text-slate-400 mt-2">
+                    Cette action retirera définitivement ces lignes de la liste en cours.
+                  </p>
+                </div>
+                <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3">
+                  <button
+                    onClick={() => setShowDeleteZeroModal(false)}
+                    className="px-4 py-2 text-slate-600 hover:text-slate-800 font-medium text-sm transition-colors"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (currentProjectId) {
+                        await removeZeroQuantityLines(currentProjectId, activeView);
+                      }
+                      setShowDeleteZeroModal(false);
+                    }}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm transition-colors shadow-sm"
+                  >
+                    Supprimer ({zeroQtyLinesCount})
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modale d'aide : Raccourcis clavier */}
+          {showShortcutsModal && (
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col">
+                <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <Keyboard className="w-5 h-5 text-blue-600" />
+                    Raccourcis clavier
+                  </h3>
+                  <button
+                    onClick={() => setShowShortcutsModal(false)}
+                    className="text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="p-6 space-y-3 max-h-[70vh] overflow-y-auto">
+                  <div className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-2.5 items-center text-sm">
+                    <kbd className="px-2.5 py-1 bg-slate-100 border border-slate-300 rounded-md font-mono font-semibold text-slate-800 shadow-sm text-xs justify-self-start">A</kbd>
+                    <span className="text-slate-700">Ajouter une nouvelle référence (focus sur le champ)</span>
+
+                    <kbd className="px-2.5 py-1 bg-slate-100 border border-slate-300 rounded-md font-mono font-semibold text-slate-800 shadow-sm text-xs justify-self-start">E</kbd>
+                    <span className="text-slate-700">Ajouter une quantité à la référence sélectionnée (+ ...)</span>
+
+                    <kbd className="px-2.5 py-1 bg-slate-100 border border-slate-300 rounded-md font-mono font-semibold text-slate-800 shadow-sm text-xs justify-self-start">T</kbd>
+                    <span className="text-slate-700">Changer le mode de tri (Réf/Fab ↔ Date d'ajout)</span>
+
+                    <div className="col-span-2 border-t border-slate-100 my-1"></div>
+
+                    <kbd className="px-2.5 py-1 bg-slate-100 border border-slate-300 rounded-md font-mono font-semibold text-slate-800 shadow-sm text-xs justify-self-start">↑ / ↓</kbd>
+                    <span className="text-slate-700">Sélectionner la référence précédente / suivante</span>
+
+                    <kbd className="px-2.5 py-1 bg-slate-100 border border-slate-300 rounded-md font-mono font-semibold text-slate-800 shadow-sm text-xs justify-self-start">+ / -</kbd>
+                    <span className="text-slate-700">Incrémenter (+1) ou décrémenter (-1) la quantité</span>
+
+                    <kbd className="px-2.5 py-1 bg-slate-100 border border-slate-300 rounded-md font-mono font-semibold text-slate-800 shadow-sm text-xs justify-self-start">Suppr</kbd>
+                    <span className="text-slate-700">Supprimer la référence sélectionnée</span>
+
+                    <div className="col-span-2 border-t border-slate-100 my-1"></div>
+
+                    <kbd className="px-2.5 py-1 bg-slate-100 border border-slate-300 rounded-md font-mono font-semibold text-slate-800 shadow-sm text-xs justify-self-start">/</kbd>
+                    <span className="text-slate-700">Rechercher une référence</span>
+
+                    <kbd className="px-2.5 py-1 bg-slate-100 border border-slate-300 rounded-md font-mono font-semibold text-slate-800 shadow-sm text-xs justify-self-start">?</kbd>
+                    <span className="text-slate-700">Afficher cette aide des raccourcis</span>
+
+                    <kbd className="px-2.5 py-1 bg-slate-100 border border-slate-300 rounded-md font-mono font-semibold text-slate-800 shadow-sm text-xs justify-self-start">Échap</kbd>
+                    <span className="text-slate-700">Fermer les fenêtres / Désélectionner</span>
+                  </div>
+                </div>
+                <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex justify-end">
+                  <button
+                    onClick={() => setShowShortcutsModal(false)}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors"
+                  >
+                    Fermer
                   </button>
                 </div>
               </div>

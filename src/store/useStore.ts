@@ -35,6 +35,7 @@ interface AppState {
   
   addOrUpdateBOMLine: (line: Omit<BOMLine, 'id'>) => Promise<void>;
   removeBOMLine: (id: string) => Promise<void>;
+  removeZeroQuantityLines: (projectId: string, sublistId: string) => Promise<number>;
   updateBOMLineQte: (id: string, quantity: number) => Promise<void>;
   updateBOMLineRef: (id: string, ref: string) => Promise<void>;
 
@@ -404,6 +405,25 @@ export const useStore = create<AppState>((set, get) => ({
     await get().saveState();
   },
 
+  removeZeroQuantityLines: async (projectId: string, sublistId: string) => {
+    let count = 0;
+    set((state) => {
+      const remaining: BOMLine[] = [];
+      for (const line of state.bomLines) {
+        if (line.projectId === projectId && line.sublistId === sublistId && line.quantity <= 0) {
+          count++;
+        } else {
+          remaining.push(line);
+        }
+      }
+      return { bomLines: remaining };
+    });
+    if (count > 0) {
+      await get().saveState();
+    }
+    return count;
+  },
+
   updateBOMLineQte: async (id, quantity) => {
     set((state) => ({
       bomLines: state.bomLines.map(l => l.id === id ? { ...l, quantity } : l)
@@ -478,5 +498,4 @@ export const useStore = create<AppState>((set, get) => ({
       await get().saveState();
   }
 }));
-
 
