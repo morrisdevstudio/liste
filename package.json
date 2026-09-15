@@ -4,7 +4,7 @@
   "version": "1.0.5",
   "repository": {
     "type": "git",
-    "url": "https://github.com/glouglou49/liste.git"
+    "url": "https://github.com/morrisdevstudio/liste.git"
   },
   "main": "dist-electron/main.js",
   "type": "module",

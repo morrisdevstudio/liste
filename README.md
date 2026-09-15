@@ -55,7 +55,7 @@ L'application génère des exports haut de gamme indispensables pour la transmis
 * **Persistance Stable :** Suivi des fichiers de projets récents et sauvegarde continue.
 
 ### 7. Mises à jour Transparentes Intégrées (Auto-Update)
-* **Téléchargement invisible :** À chaque lancement, l'application interroge les serveurs GitHub (`glouglou49/liste`). Si une mise à jour est trouvée, elle la télécharge silencieusement en arrière-plan sans interrompre le travail de l'utilisateur.
+* **Téléchargement invisible :** À chaque lancement, l'application interroge les serveurs GitHub (`morrisdevstudio/liste`). Si une mise à jour est trouvée, elle la télécharge silencieusement en arrière-plan sans interrompre le travail de l'utilisateur.
 * **Interface fluide et premium :** Pendant le téléchargement, un élégant bandeau avec barre de progression dynamique s'affiche au sommet de l'écran.
 * **Installation sans friction :** Une fois la mise à jour téléchargée et prête, l'application propose un simple bouton "Redémarrer et Installer". Un clic suffit pour écraser l'ancienne version, tout en conservant 100% des données et paramètres de l'utilisateur.
 * **Mémoire de session :** Le bandeau peut être fermé temporairement ; l'application n'embêtera plus l'utilisateur pendant sa session active.
