@@ -92,6 +92,7 @@ let mainWindow: BrowserWindow | null = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
+    title: 'Liste BOM',
     width: 1200,
     height: 800,
     webPreferences: {
@@ -100,7 +101,7 @@ function createWindow() {
       contextIsolation: true,
       sandbox: true,
     },
-    icon: path.join(_dirname, '../public/vite.svg'), // Temporaire
+    icon: path.join(_dirname, '../public/icon.ico'),
   });
 
   mainWindow.setMenu(null);
@@ -708,4 +709,3 @@ ipcMain.handle('open-external', async (_event, url: string) => {
     return { success: false, error: error.message };
   }
 });
-
