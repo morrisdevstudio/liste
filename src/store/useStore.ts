@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Project, BOMLine, Manufacturer, Sublist, Category, Filiale, ChargeAffaire, ShortcutBindings, ProjectFileData } from '../types';
+import { Project, BOMLine, Manufacturer, Sublist, Category, Filiale, ChargeAffaire, ShortcutBindings, ProjectFileData, ListViewPreferences, DEFAULT_LIST_VIEW_PREFERENCES } from '../types';
 import { mockManufacturers } from '../mockData';
 import { DEFAULT_SHORTCUT_BINDINGS, mergeShortcutBindings } from '../shortcuts';
 
@@ -18,6 +18,7 @@ interface AppState {
   recentFiles: RecentFile[];
   defaultTechName: string;
   shortcutBindings: ShortcutBindings;
+  listViewPreferences: ListViewPreferences;
   
   isLoaded: boolean;
   loadState: () => Promise<void>;
@@ -26,6 +27,7 @@ interface AppState {
   setDbFilePath: (path: string) => Promise<void>;
   setDefaultTechName: (name: string) => Promise<void>;
   setShortcutBindings: (bindings: ShortcutBindings) => Promise<void>;
+  setListViewPreferences: (preferences: ListViewPreferences) => Promise<void>;
   
   addSublist: (sublist: Omit<Sublist, 'id'>) => Promise<void>;
   removeSublist: (id: string) => Promise<void>;
@@ -60,6 +62,7 @@ export const useStore = create<AppState>((set, get) => ({
   recentFiles: [],
   defaultTechName: 'Technicien BE',
   shortcutBindings: DEFAULT_SHORTCUT_BINDINGS,
+  listViewPreferences: DEFAULT_LIST_VIEW_PREFERENCES,
   isLoaded: false,
 
   setDbFilePath: async (path) => {
@@ -81,6 +84,13 @@ export const useStore = create<AppState>((set, get) => ({
     set({ shortcutBindings });
     if (window.electronAPI) {
       await window.electronAPI.saveConfig({ shortcutBindings });
+    }
+  },
+
+  setListViewPreferences: async (listViewPreferences) => {
+    set({ listViewPreferences });
+    if (window.electronAPI) {
+      await window.electronAPI.saveConfig({ listViewPreferences });
     }
   },
 
@@ -126,6 +136,7 @@ export const useStore = create<AppState>((set, get) => ({
           dbFilePath: config?.dbFilePath || null,
           defaultTechName: config?.defaultTechName || 'Technicien BE',
           shortcutBindings: mergeShortcutBindings(config?.shortcutBindings),
+          listViewPreferences: { ...DEFAULT_LIST_VIEW_PREFERENCES, ...config?.listViewPreferences },
           isLoaded: true
         });
       } else {

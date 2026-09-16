@@ -8,6 +8,12 @@ const electronAPI: ElectronApi = {
   selectDbFile: () => ipcRenderer.invoke('select-db-file'),
   openProjectFile: () => ipcRenderer.invoke('open-project-file'),
   openProjectByPath: (filePath: string) => ipcRenderer.invoke('open-project-by-path', filePath),
+  takeStartupProjectFile: () => ipcRenderer.invoke('take-startup-project-file'),
+  onOpenProjectFile: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, filePath: string) => callback(filePath);
+    ipcRenderer.on('open-project-file', listener);
+    return () => ipcRenderer.removeListener('open-project-file', listener);
+  },
   saveNewProjectFile: (data, defaultFilename) => ipcRenderer.invoke('save-new-project-file', data, defaultFilename),
   saveProjectByPath: (filePath, data) => ipcRenderer.invoke('save-project-by-path', filePath, data),
   exportExcelAuto: (listFilePath: string, filename: string, base64Data: string) => ipcRenderer.invoke('export-excel-auto', listFilePath, filename, base64Data),

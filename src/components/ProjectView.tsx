@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useStore } from '../store/useStore';
-import { ArrowLeft, Upload, Plus, Download, FileText, Search, Trash2, Minus, ChevronLeft, Menu, Settings, ArrowUpDown, Calendar, ClipboardList, Sliders, MoreHorizontal, HelpCircle, Keyboard, X } from 'lucide-react';
+import { ArrowLeft, Upload, Plus, Download, FileText, Search, Trash2, Minus, ChevronDown, ChevronLeft, ChevronUp, Menu, Settings, ArrowUpDown, Calendar, ClipboardList, Sliders, MoreHorizontal, HelpCircle, Keyboard, X } from 'lucide-react';
 import { ProjectSettingsModal } from './ProjectSettingsModal';
-import { ComponentRef, Project, ShortcutAction } from '../types';
+import { ComponentRef, ListViewPreferences, Project, ShortcutAction } from '../types';
 import * as XLSX from 'xlsx';
 import { ExportService } from '../services/ExportService';
 import { bindingFromEvent, DEFAULT_SHORTCUT_BINDINGS, formatShortcut, isShortcut, sameShortcut, SHORTCUT_ACTIONS, SHORTCUT_LABELS } from '../shortcuts';
@@ -173,7 +173,7 @@ function EditableReference({ value, onSave }: { value: string, onSave: (newRef: 
 type ColumnId = 'ref' | 'designation' | 'quantity' | 'status' | 'manufacturer' | 'fabCode' | 'listsInfo';
 
 export function ProjectView() {
-  const { currentProjectId, currentProject, closeProject, bomLines, manufacturers, addOrUpdateBOMLine, removeBOMLine, removeZeroQuantityLines, updateBOMLineQte, updateBOMLineRef, importBOMData, sublists, addSublist, removeSublist, currentProjectPath, shortcutBindings, setShortcutBindings } = useStore();
+  const { currentProjectId, currentProject, closeProject, bomLines, manufacturers, addOrUpdateBOMLine, removeBOMLine, removeZeroQuantityLines, updateBOMLineQte, updateBOMLineRef, importBOMData, sublists, addSublist, removeSublist, currentProjectPath, shortcutBindings, setShortcutBindings, listViewPreferences, setListViewPreferences } = useStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const newRefInputRef = useRef<HTMLInputElement>(null);
@@ -186,6 +186,7 @@ export function ProjectView() {
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [capturingShortcut, setCapturingShortcut] = useState<ShortcutAction | null>(null);
   const [shortcutError, setShortcutError] = useState<string | null>(null);
+  const [showDisplayMenu, setShowDisplayMenu] = useState(false);
 
   const [activeView, setActiveView] = useState('Globale');
   const projectSublists = useMemo(() => {
@@ -785,6 +786,16 @@ export function ProjectView() {
     setIsSettingsOpen(false);
   };
 
+  const updateListViewPreferences = (changes: Partial<ListViewPreferences>) => {
+    void setListViewPreferences({ ...listViewPreferences, ...changes });
+  };
+
+  const densityClasses = listViewPreferences.density === 'comfortable'
+    ? { main: 'p-6', controls: 'mb-4', table: '' }
+    : listViewPreferences.density === 'compact'
+      ? { main: 'p-4', controls: 'mb-3', table: '[&_th]:!px-4 [&_th]:!py-2 [&_td]:!px-4 [&_td]:!py-1.5 [&_input]:!py-1' }
+      : { main: 'p-3', controls: 'mb-2', table: '[&_th]:!px-3 [&_th]:!py-1.5 [&_td]:!px-3 [&_td]:!py-1 [&_input]:!py-0.5' };
+
   return (
     <div className="flex h-full bg-slate-50">
 
@@ -926,6 +937,17 @@ export function ProjectView() {
 
         {/* Header */}
 
+        {listViewPreferences.topPanelCollapsed ? (
+          <button
+            type="button"
+            onClick={() => updateListViewPreferences({ topPanelCollapsed: false })}
+            className="h-9 border-b border-slate-200 bg-white px-4 text-left text-sm font-medium text-slate-600 hover:bg-slate-50 flex items-center gap-2 shrink-0"
+          >
+            <ChevronDown className="w-4 h-4" />
+            Afficher les contrôles
+          </button>
+        ) : (
+          <>
         {/* Project Info Banner */}
         <div className="bg-slate-50 border-b border-slate-200 px-6 py-2.5 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs shrink-0 shadow-sm">
           <div className="flex items-center gap-2">
@@ -1029,13 +1051,16 @@ export function ProjectView() {
             </button>
           </div>
         </header>
+          </>
+        )}
 
 
         {/* Main Content */}
-        <main className="flex-1 overflow-hidden flex flex-col p-6">
+        <main className={`flex-1 overflow-hidden flex flex-col ${densityClasses.main}`}>
 
           {/* Navigation & Controls */}
-          <div className="flex items-center justify-between mb-4 shrink-0">
+          {!listViewPreferences.topPanelCollapsed && (
+          <div className={`flex items-center justify-between ${densityClasses.controls} shrink-0`}>
             <div className="flex-1"></div>
             <div className="flex items-center gap-3">
               {/* Boutons de sélection du tri */}
@@ -1208,14 +1233,69 @@ export function ProjectView() {
                 </div>
               )}
 
+              <div className="relative">
+                <button
+                  onClick={() => setShowDisplayMenu(!showDisplayMenu)}
+                  className="px-3 py-2 border border-slate-300 rounded-md text-sm font-medium hover:bg-slate-50 flex items-center gap-2 transition-colors bg-white text-slate-700 shadow-sm"
+                  title="Réglages d'affichage"
+                >
+                  <Sliders className="w-4 h-4 text-slate-500" />
+                  Affichage
+                </button>
+                {showDisplayMenu && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-xl shadow-xl z-30 p-3 space-y-3">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Densité des lignes</p>
+                      <div className="space-y-1">
+                        {([
+                          ['comfortable', 'Confort'],
+                          ['compact', 'Compact'],
+                          ['dense', 'Très compact'],
+                        ] as const).map(([density, label]) => (
+                          <button
+                            key={density}
+                            onClick={() => updateListViewPreferences({ density })}
+                            className={`w-full rounded-md px-2 py-1.5 text-left text-sm ${listViewPreferences.density === density ? 'bg-blue-50 font-medium text-blue-700' : 'text-slate-700 hover:bg-slate-50'}`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="border-t border-slate-100 pt-2">
+                      <button
+                        onClick={() => {
+                          updateListViewPreferences({ topPanelCollapsed: true });
+                          setShowDisplayMenu(false);
+                        }}
+                        className="w-full rounded-md px-2 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+                      >
+                        Réduire la zone haute
+                      </button>
+                      {activeView !== 'Globale' && activeView !== 'EtatPrepa' && (
+                        <button
+                          onClick={() => {
+                            updateListViewPreferences({ bottomPanelCollapsed: true });
+                            setShowDisplayMenu(false);
+                          }}
+                          className="w-full rounded-md px-2 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+                        >
+                          Réduire la zone d'import
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
+          )}
 
           {/* Data Grid */}
           <div className="flex-1 bg-white border border-slate-200 rounded-lg shadow-sm flex flex-col overflow-hidden">
             <div className="flex-1 overflow-auto">
               <table 
-                className="min-w-full divide-y divide-slate-200 relative"
+                className={`min-w-full divide-y divide-slate-200 relative ${densityClasses.table}`}
                 style={{
                   tableLayout: 'fixed',
                   width: (Object.values(columns) as { visible: boolean; width: number }[]).reduce((acc, col) => acc + (col.visible ? col.width : 0), 0) + (activeView !== 'Globale' && activeView !== 'EtatPrepa' ? 64 : 0)
@@ -1483,7 +1563,16 @@ export function ProjectView() {
               </table>
             </div>
 
-            {activeView !== 'Globale' && activeView !== 'EtatPrepa' && (
+            {activeView !== 'Globale' && activeView !== 'EtatPrepa' && (listViewPreferences.bottomPanelCollapsed ? (
+              <button
+                type="button"
+                onClick={() => updateListViewPreferences({ bottomPanelCollapsed: false })}
+                className="h-9 border-t border-slate-200 bg-slate-50 px-4 text-left text-sm font-medium text-slate-600 hover:bg-slate-100 flex items-center gap-2 shrink-0"
+              >
+                <ChevronUp className="w-4 h-4" />
+                Afficher l'import
+              </button>
+            ) : (
               <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end shrink-0">
                 <input
                   type="file"
@@ -1515,7 +1604,7 @@ export function ProjectView() {
                   </button>
                 </div>
               </div>
-            )}
+            ))}
           </div>
 
           {showImportModal && (

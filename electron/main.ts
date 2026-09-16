@@ -92,8 +92,39 @@ function getDb(forceDbPath?: string): Database.Database {
 }
 
 let mainWindow: BrowserWindow | null = null;
+let pendingProjectFile = findProjectFile(process.argv);
+let projectOpenReceiverReady = false;
+
+function findProjectFile(commandLine: string[]): string | null {
+  const filePath = commandLine.find(argument => path.extname(argument).toLowerCase() === '.list');
+  return filePath ? path.resolve(filePath) : null;
+}
+
+function sendProjectFileToRenderer(filePath: string) {
+  if (!mainWindow || !projectOpenReceiverReady) {
+    pendingProjectFile = filePath;
+    return;
+  }
+
+  pendingProjectFile = null;
+  mainWindow.webContents.send('open-project-file', filePath);
+}
+
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', (_event, commandLine) => {
+    const filePath = findProjectFile(commandLine);
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+    if (filePath) sendProjectFileToRenderer(filePath);
+  });
+}
 
 function createWindow() {
+  projectOpenReceiverReady = false;
   mainWindow = new BrowserWindow({
     title: 'Liste BOM',
     width: 1200,
@@ -115,6 +146,13 @@ function createWindow() {
     mainWindow.loadFile(path.join(_dirname, '../dist/index.html'));
   }
 }
+
+ipcMain.handle('take-startup-project-file', () => {
+  projectOpenReceiverReady = true;
+  const filePath = pendingProjectFile;
+  pendingProjectFile = null;
+  return filePath;
+});
 
 app.whenReady().then(() => {
   createWindow();

@@ -1,7 +1,7 @@
 {
   "name": "liste-app",
   "private": true,
-  "version": "1.0.8",
+  "version": "1.0.9",
   "repository": {
     "type": "git",
     "url": "https://github.com/morrisdevstudio/liste.git"
@@ -70,6 +70,14 @@
     },
     "publish": [
       "github"
+    ],
+    "fileAssociations": [
+      {
+        "ext": "list",
+        "name": "Liste BOM",
+        "description": "Fichier Liste BOM",
+        "role": "Editor"
+      }
     ],
     "win": {
       "target": [

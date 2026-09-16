@@ -86,6 +86,20 @@ export type ShortcutBinding = {
 
 export type ShortcutBindings = Record<ShortcutAction, ShortcutBinding>;
 
+export type ListDensity = 'comfortable' | 'compact' | 'dense';
+
+export type ListViewPreferences = {
+  density: ListDensity;
+  topPanelCollapsed: boolean;
+  bottomPanelCollapsed: boolean;
+};
+
+export const DEFAULT_LIST_VIEW_PREFERENCES: ListViewPreferences = {
+  density: 'comfortable',
+  topPanelCollapsed: false,
+  bottomPanelCollapsed: false,
+};
+
 export type ProjectFileData = {
   project: Project;
   sublists: Sublist[];
@@ -97,6 +111,7 @@ export type AppConfig = {
   recentFiles?: Array<{ id: string; path: string; tech: string; nomAffaire?: string; nomTableau?: string; lastOpened: number }>;
   defaultTechName?: string;
   shortcutBindings?: Partial<ShortcutBindings>;
+  listViewPreferences?: Partial<ListViewPreferences>;
 };
 
 export type CatalogImportMapping = {
@@ -114,6 +129,8 @@ export type ElectronApi = {
   selectDbFile: () => Promise<string | null>;
   openProjectFile: () => Promise<{ filePath: string; data: ProjectFileData } | { error: string } | null>;
   openProjectByPath: (filePath: string) => Promise<{ filePath: string; data: ProjectFileData } | { error: string }>;
+  takeStartupProjectFile: () => Promise<string | null>;
+  onOpenProjectFile: (callback: (filePath: string) => void) => () => void;
   saveNewProjectFile: (data: ProjectFileData, defaultFilename?: string) => Promise<string | { error: string } | null>;
   saveProjectByPath: (filePath: string, data: ProjectFileData) => Promise<{ success: boolean; error?: string }>;
   exportExcelAuto: (listFilePath: string, filename: string, base64Data: string) => Promise<{ success: boolean; filePath?: string; error?: string; cancelled?: boolean }>;
