@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
-import { Play, Plus, FolderOpen, ChevronRight, Download, Database, Clock, Edit2, Check, X, User } from 'lucide-react';
+import { Plus, FolderOpen, Database, Clock, Edit2, Check, X, User } from 'lucide-react';
 import { ProjectSettingsModal } from './ProjectSettingsModal';
 import { Project } from '../types';
 
@@ -27,12 +27,8 @@ export function Dashboard({ onOpenAdmin }: DashboardProps) {
       id: `${data.affaireOrigine?.trim()}-${data.ligneOrigine?.trim()}`
     } as Omit<Project, 'createdAt'>;
     // Trim string values
-    for (const key in projectToCreate) {
-      if (typeof projectToCreate[key as keyof typeof projectToCreate] === 'string') {
-        (projectToCreate as any)[key] = (projectToCreate as any)[key].trim();
-      }
-    }
-    await createProjectInteractive(projectToCreate);
+    const trimmedProject = Object.fromEntries(Object.entries(projectToCreate).map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value])) as Omit<Project, 'createdAt'>;
+    await createProjectInteractive(trimmedProject);
     setShowNewProjectModal(false);
   };
 

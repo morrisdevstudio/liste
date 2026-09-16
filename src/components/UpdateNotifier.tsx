@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Download, X, Sparkles, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { X, Sparkles, RefreshCw, CheckCircle2 } from 'lucide-react';
 
 type UpdateStatus = 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'error';
 

@@ -1,12 +1,11 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useStore } from '../store/useStore';
-import { ArrowLeft, Upload, Plus, Download, FileText, Search, Trash2, Minus, ChevronLeft, ChevronRight, Menu, Settings, ArrowUpDown, Calendar, ClipboardList, Sliders, MoreHorizontal, HelpCircle, Keyboard, X } from 'lucide-react';
+import { ArrowLeft, Upload, Plus, Download, FileText, Search, Trash2, Minus, ChevronLeft, Menu, Settings, ArrowUpDown, Calendar, ClipboardList, Sliders, MoreHorizontal, HelpCircle, Keyboard, X } from 'lucide-react';
 import { ProjectSettingsModal } from './ProjectSettingsModal';
-import { Category, ComponentRef, Project } from '../types';
+import { ComponentRef, Project, ShortcutAction } from '../types';
 import * as XLSX from 'xlsx';
 import { ExportService } from '../services/ExportService';
-
-const VIEWS = ['Globale', 'Tôlerie', 'Électronique', 'Appro Anticipé'];
+import { bindingFromEvent, DEFAULT_SHORTCUT_BINDINGS, formatShortcut, isShortcut, sameShortcut, SHORTCUT_ACTIONS, SHORTCUT_LABELS } from '../shortcuts';
 
 function EditableQuantity({
   value,
@@ -22,14 +21,6 @@ function EditableQuantity({
   const [mode, setMode] = useState<'view' | 'edit-abs' | 'edit-add' | 'edit-sub'>('view');
   const [tempValue, setTempValue] = useState<number | ''>('');
   const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (isTriggerAdd) {
-      setTempValue('');
-      setMode('edit-add');
-      onModeConsumed?.();
-    }
-  }, [isTriggerAdd, onModeConsumed]);
 
   useEffect(() => {
     if (mode !== 'view' && inputRef.current) {
@@ -51,6 +42,7 @@ function EditableQuantity({
     }
 
     setMode('view');
+    if (isTriggerAdd) onModeConsumed?.();
     if (newVal !== value) {
       onSave(newVal);
     }
@@ -58,7 +50,10 @@ function EditableQuantity({
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleSave();
-    if (e.key === 'Escape') setMode('view');
+    if (e.key === 'Escape') {
+      setMode('view');
+      if (isTriggerAdd) onModeConsumed?.();
+    }
   };
 
   if (mode !== 'view') {
@@ -124,7 +119,7 @@ function EditableQuantity({
   );
 }
 
-function EditableReference({ value, onSave, suggestedRefs }: { value: string, onSave: (newRef: string) => void, suggestedRefs: ComponentRef[] }) {
+function EditableReference({ value, onSave }: { value: string, onSave: (newRef: string) => void }) {
   const [mode, setMode] = useState<'view' | 'edit'>('view');
   const [tempValue, setTempValue] = useState<string>('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -178,7 +173,7 @@ function EditableReference({ value, onSave, suggestedRefs }: { value: string, on
 type ColumnId = 'ref' | 'designation' | 'quantity' | 'status' | 'manufacturer' | 'fabCode' | 'listsInfo';
 
 export function ProjectView() {
-  const { currentProjectId, currentProject, closeProject, bomLines, manufacturers, addOrUpdateBOMLine, removeBOMLine, removeZeroQuantityLines, updateBOMLineQte, updateBOMLineRef, importBOMData, sublists, addSublist, removeSublist, currentProjectPath } = useStore();
+  const { currentProjectId, currentProject, closeProject, bomLines, manufacturers, addOrUpdateBOMLine, removeBOMLine, removeZeroQuantityLines, updateBOMLineQte, updateBOMLineRef, importBOMData, sublists, addSublist, removeSublist, currentProjectPath, shortcutBindings, setShortcutBindings } = useStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const newRefInputRef = useRef<HTMLInputElement>(null);
@@ -189,6 +184,8 @@ export function ProjectView() {
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [showDeleteZeroModal, setShowDeleteZeroModal] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const [capturingShortcut, setCapturingShortcut] = useState<ShortcutAction | null>(null);
+  const [shortcutError, setShortcutError] = useState<string | null>(null);
 
   const [activeView, setActiveView] = useState('Globale');
   const projectSublists = useMemo(() => {
@@ -204,13 +201,20 @@ export function ProjectView() {
   }, [projectSublists, activeView]);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'ref_fab' | 'date' | 'status'>('ref_fab');
+  const selectView = (view: string) => {
+    setActiveView(view);
+    setSelectedLineId(null);
+    setActiveAddQtyLineId(null);
+    setShowActionsMenu(false);
+    if (view !== 'EtatPrepa' && sortBy === 'status') setSortBy('ref_fab');
+  };
 
   const [columns, setColumns] = useState<Record<ColumnId, { visible: boolean; width: number }>>(() => {
     const saved = localStorage.getItem('project_view_columns_v1');
     if (saved) {
       try {
         return JSON.parse(saved);
-      } catch (e) {}
+      } catch {}
     }
     return {
       ref: { visible: true, width: 200 },
@@ -245,12 +249,6 @@ export function ProjectView() {
     };
   }, []);
 
-  useEffect(() => {
-    setSelectedLineId(null);
-    setActiveAddQtyLineId(null);
-    setShowActionsMenu(false);
-  }, [activeView]);
-
   const resizingColumnRef = useRef<{ id: ColumnId; startX: number; startWidth: number } | null>(null);
 
   const handleMouseDown = (e: React.MouseEvent, id: ColumnId) => {
@@ -281,12 +279,6 @@ export function ProjectView() {
     document.removeEventListener('mouseup', handleMouseUp);
   };
 
-  useEffect(() => {
-    if (activeView !== 'EtatPrepa' && sortBy === 'status') {
-      setSortBy('ref_fab');
-    }
-  }, [activeView, sortBy]);
-
   // Saisie manuelle
   const [newRef, setNewRef] = useState('');
   const [newQty, setNewQty] = useState<number | ''>(1);
@@ -316,7 +308,7 @@ export function ProjectView() {
       }
     };
     fetchRefDetails();
-  }, [bomLines, currentProjectId]);
+  }, [bomLines, currentProjectId, refDetails]);
 
   // Gérer les suggestions d'autocomplétion
   useEffect(() => {
@@ -446,11 +438,38 @@ export function ProjectView() {
         return a.ref.localeCompare(b.ref, undefined, { numeric: true, sensitivity: 'base' });
       }
     });
-  }, [bomLines, currentProjectId, activeView, searchTerm, refDetails, manufacturers, sortBy]);
+  }, [bomLines, currentProjectId, activeView, searchTerm, refDetails, manufacturers, projectSublists, sortBy]);
+
+  useEffect(() => {
+    if (!capturingShortcut) return;
+
+    const handleCapture = (e: KeyboardEvent) => {
+      const binding = bindingFromEvent(e);
+      if (!binding) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const conflictingAction = SHORTCUT_ACTIONS.find(action => action !== capturingShortcut && sameShortcut(shortcutBindings[action], binding));
+      if (conflictingAction) {
+        setShortcutError(`Cette combinaison est déjà utilisée pour « ${SHORTCUT_LABELS[conflictingAction]} ».`);
+        return;
+      }
+
+      void setShortcutBindings({ ...shortcutBindings, [capturingShortcut]: binding });
+      setShortcutError(null);
+      setCapturingShortcut(null);
+    };
+
+    window.addEventListener('keydown', handleCapture, true);
+    return () => window.removeEventListener('keydown', handleCapture, true);
+  }, [capturingShortcut, setShortcutBindings, shortcutBindings]);
 
   // Gestion des raccourcis clavier
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (capturingShortcut) return;
+
       const target = e.target as HTMLElement | null;
       const isEditing = target && (
         target.tagName === 'INPUT' ||
@@ -459,7 +478,7 @@ export function ProjectView() {
         target.isContentEditable
       );
 
-      if (e.key === 'Escape') {
+      if (isShortcut(e, shortcutBindings.dismiss)) {
         if (showShortcutsModal) {
           setShowShortcutsModal(false);
           return;
@@ -489,7 +508,7 @@ export function ProjectView() {
       if (isEditing) return;
 
       // A : Focus sur l'ajout d'une nouvelle référence
-      if (e.key === 'a' || e.key === 'A') {
+      if (isShortcut(e, shortcutBindings.addReference)) {
         if (activeView !== 'Globale' && activeView !== 'EtatPrepa' && activeView !== 'Chiffrage') {
           e.preventDefault();
           newRefInputRef.current?.focus();
@@ -499,7 +518,7 @@ export function ProjectView() {
       }
 
       // E : Ajouter une quantité à la référence sélectionnée
-      if (e.key === 'e' || e.key === 'E') {
+      if (isShortcut(e, shortcutBindings.addQuantity)) {
         if (selectedLineId && activeView !== 'Globale' && activeView !== 'EtatPrepa' && activeView !== 'Chiffrage') {
           e.preventDefault();
           setActiveAddQtyLineId(selectedLineId);
@@ -508,7 +527,7 @@ export function ProjectView() {
       }
 
       // T : Changer la méthode de tri
-      if (e.key === 't' || e.key === 'T') {
+      if (isShortcut(e, shortcutBindings.cycleSort)) {
         e.preventDefault();
         setSortBy(prev => {
           if (activeView === 'EtatPrepa') {
@@ -523,7 +542,7 @@ export function ProjectView() {
       }
 
       // Flèche Bas : Sélectionner la référence suivante
-      if (e.key === 'ArrowDown') {
+      if (isShortcut(e, shortcutBindings.selectNext)) {
         if (viewLines.length === 0) return;
         e.preventDefault();
         const currentIndex = selectedLineId ? viewLines.findIndex(l => l.id === selectedLineId) : -1;
@@ -535,7 +554,7 @@ export function ProjectView() {
       }
 
       // Flèche Haut : Sélectionner la référence précédente
-      if (e.key === 'ArrowUp') {
+      if (isShortcut(e, shortcutBindings.selectPrevious)) {
         if (viewLines.length === 0) return;
         e.preventDefault();
         const currentIndex = selectedLineId ? viewLines.findIndex(l => l.id === selectedLineId) : -1;
@@ -547,7 +566,7 @@ export function ProjectView() {
       }
 
       // + / = : Incrémenter la quantité (+1)
-      if (e.key === '+' || e.key === '=') {
+      if (isShortcut(e, shortcutBindings.incrementQuantity)) {
         if (selectedLineId && activeView !== 'Globale' && activeView !== 'EtatPrepa' && activeView !== 'Chiffrage') {
           const line = viewLines.find(l => l.id === selectedLineId);
           if (line) {
@@ -559,7 +578,7 @@ export function ProjectView() {
       }
 
       // - : Décrémenter la quantité (-1)
-      if (e.key === '-') {
+      if (isShortcut(e, shortcutBindings.decrementQuantity)) {
         if (selectedLineId && activeView !== 'Globale' && activeView !== 'EtatPrepa' && activeView !== 'Chiffrage') {
           const line = viewLines.find(l => l.id === selectedLineId);
           if (line) {
@@ -571,7 +590,7 @@ export function ProjectView() {
       }
 
       // Suppr / Backspace : Supprimer la ligne sélectionnée
-      if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (isShortcut(e, shortcutBindings.deleteLine)) {
         if (selectedLineId && activeView !== 'Globale' && activeView !== 'EtatPrepa' && activeView !== 'Chiffrage') {
           e.preventDefault();
           const currentIndex = viewLines.findIndex(l => l.id === selectedLineId);
@@ -587,7 +606,7 @@ export function ProjectView() {
       }
 
       // / : Focus recherche
-      if (e.key === '/') {
+      if (isShortcut(e, shortcutBindings.focusSearch)) {
         e.preventDefault();
         searchInputRef.current?.focus();
         searchInputRef.current?.select();
@@ -595,7 +614,7 @@ export function ProjectView() {
       }
 
       // ? : Afficher l'aide des raccourcis
-      if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+      if (isShortcut(e, shortcutBindings.toggleHelp)) {
         e.preventDefault();
         setShowShortcutsModal(prev => !prev);
         return;
@@ -606,7 +625,7 @@ export function ProjectView() {
     return () => {
       window.removeEventListener('keydown', handleGlobalKeyDown);
     };
-  }, [viewLines, selectedLineId, activeView, showShortcutsModal, showDeleteZeroModal, showActionsMenu, showColDropdown, updateBOMLineQte, removeBOMLine]);
+  }, [viewLines, selectedLineId, activeView, showShortcutsModal, showDeleteZeroModal, showActionsMenu, showColDropdown, updateBOMLineQte, removeBOMLine, capturingShortcut, shortcutBindings]);
 
   interface ImportConfig {
     sheetIndex: number;
@@ -615,7 +634,7 @@ export function ProjectView() {
     qtyCol: string;
   }
 
-  const [pendingImports, setPendingImports] = useState<{ file: File, wb: any }[]>([]);
+  const [pendingImports, setPendingImports] = useState<{ file: File, wb: XLSX.WorkBook }[]>([]);
   const [importConfig, setImportConfig] = useState<ImportConfig>({ sheetIndex: 0, dataStartRow: 2, refCol: 'A', qtyCol: 'B' });
   const [showImportModal, setShowImportModal] = useState(false);
 
@@ -628,7 +647,7 @@ export function ProjectView() {
     const files = Array.from(e.target.files || []) as File[];
     if (files.length === 0 || !currentProjectId) return;
 
-    const parsed = await Promise.all(files.map((file) => new Promise<{ file: File, wb: any }>((resolve) => {
+    const parsed = await Promise.all(files.map((file) => new Promise<{ file: File, wb: XLSX.WorkBook }>((resolve) => {
       const reader = new FileReader();
       reader.onload = (evt) => {
         const bstr = evt.target?.result;
@@ -648,14 +667,14 @@ export function ProjectView() {
   };
 
   const confirmImport = () => {
-    let allMappedData: any[] = [];
+    const allMappedData: Array<Record<string, unknown>> = [];
 
     for (const { wb } of pendingImports) {
       const sheetName = wb.SheetNames[importConfig.sheetIndex] || wb.SheetNames[0];
       const ws = wb.Sheets[sheetName];
       if (!ws) continue;
 
-      const dataRows = XLSX.utils.sheet_to_json<any>(ws, { header: "A", defval: "" });
+      const dataRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { header: "A", defval: "" });
 
       for (let i = Math.max(0, importConfig.dataStartRow - 1); i < dataRows.length; i++) {
         const row = dataRows[i];
@@ -713,7 +732,7 @@ export function ProjectView() {
 
   const handleRefBlur = async () => {
     if (!newRef) return;
-    let finalRef = newRef.trim();
+    const finalRef = newRef.trim();
     const exactMatch = suggestedRefs.find(r => r.ref.toLowerCase() === finalRef.toLowerCase());
     if (exactMatch) {
       setNewRef(exactMatch.ref);
@@ -809,7 +828,7 @@ export function ProjectView() {
 
           <div>
             <button
-              onClick={() => setActiveView('Globale')}
+              onClick={() => selectView('Globale')}
               className={`w-full text-left px-2 py-2 rounded-md text-sm font-medium transition-colors ${activeView === 'Globale' ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-100'}`}
             >
               Liste globale
@@ -818,7 +837,7 @@ export function ProjectView() {
               {projectSublists.filter(s => s.type === 'fiche_achat').map(s => (
                 <div key={s.id} className="flex items-center group pr-2">
                   <button
-                    onClick={() => setActiveView(s.id)}
+                    onClick={() => selectView(s.id)}
                     className={`flex-1 text-left px-2 py-1.5 rounded-md text-sm transition-colors ${activeView === s.id ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}
                   >
                     <span className="truncate block max-w-[150px]" title={s.name}>{s.name}</span>
@@ -840,7 +859,7 @@ export function ProjectView() {
 
               <div className="mt-4">
                 <button
-                  onClick={() => setActiveView('EtatPrepa')}
+                  onClick={() => selectView('EtatPrepa')}
                   className={`w-full text-left px-2 py-2 rounded-md text-sm font-medium transition-colors ${activeView === 'EtatPrepa' ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-100'}`}
                 >
                   État préparatoire
@@ -849,7 +868,7 @@ export function ProjectView() {
                   {projectSublists.filter(s => s.type === 'appro_anticipe').map(s => (
                     <div key={s.id} className="flex items-center group pr-2">
                       <button
-                        onClick={() => setActiveView(s.id)}
+                        onClick={() => selectView(s.id)}
                         className={`flex-1 text-left px-2 py-1.5 rounded-md text-sm transition-colors ${activeView === s.id ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}
                       >
                         <span className="truncate block max-w-[150px]" title={s.name}>{s.name}</span>
@@ -875,7 +894,7 @@ export function ProjectView() {
 
               <div className="mt-4 border-t border-slate-100 pt-3">
                 <button
-                  onClick={() => setActiveView('Chiffrage')}
+                  onClick={() => selectView('Chiffrage')}
                   className={`w-full text-left px-2 py-2 rounded-md text-sm font-medium transition-colors ${activeView === 'Chiffrage' ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-slate-700 hover:bg-slate-100'}`}
                 >
                   Chiffrage
@@ -885,6 +904,20 @@ export function ProjectView() {
             </div>
           </div>
 
+        </div>
+
+        <div className={`border-t border-slate-200 p-3 shrink-0 ${isSidebarOpen ? '' : 'flex justify-center'}`}>
+          <button
+            onClick={() => {
+              setShortcutError(null);
+              setShowShortcutsModal(true);
+            }}
+            className={`w-full px-3 py-2 rounded-md text-sm font-medium hover:bg-slate-100 flex items-center gap-2 transition-colors text-slate-600 ${isSidebarOpen ? '' : 'w-10 justify-center px-0'}`}
+            title={`Raccourcis clavier (${formatShortcut(shortcutBindings.toggleHelp)})`}
+          >
+            <HelpCircle className="w-4 h-4 shrink-0" />
+            {isSidebarOpen && <span>Raccourcis</span>}
+          </button>
         </div>
       </aside>
 
@@ -1175,15 +1208,6 @@ export function ProjectView() {
                 </div>
               )}
 
-              {/* Bouton Aide raccourcis clavier */}
-              <button
-                onClick={() => setShowShortcutsModal(true)}
-                className="px-3 py-2 border border-slate-300 rounded-md text-sm font-medium hover:bg-slate-50 flex items-center gap-1.5 transition-colors bg-white text-slate-700 shadow-sm"
-                title="Raccourcis clavier (?)"
-              >
-                <HelpCircle className="w-4 h-4 text-slate-500" />
-                <span className="hidden sm:inline">Raccourcis</span>
-              </button>
             </div>
           </div>
 
@@ -1310,7 +1334,6 @@ export function ProjectView() {
                               <EditableReference
                                 value={line.ref}
                                 onSave={(newRef) => updateBOMLineRef(line.id, newRef)}
-                                suggestedRefs={suggestedRefs}
                               />
                             )}
                           </td>
@@ -1325,12 +1348,14 @@ export function ProjectView() {
                             {activeView === 'Globale' || activeView === 'EtatPrepa' || activeView === 'Chiffrage' ? (
                               line.quantity
                             ) : (
-                              <EditableQuantity
-                                value={line.quantity}
-                                onSave={(newQty) => updateBOMLineQte(line.id, newQty)}
-                                isTriggerAdd={activeAddQtyLineId === line.id}
-                                onModeConsumed={() => setActiveAddQtyLineId(null)}
-                              />
+                              <React.Fragment key={`${line.id}:${activeAddQtyLineId === line.id ? 'add' : 'view'}`}>
+                                <EditableQuantity
+                                  value={line.quantity}
+                                  onSave={(newQty) => updateBOMLineQte(line.id, newQty)}
+                                  isTriggerAdd={activeAddQtyLineId === line.id}
+                                  onModeConsumed={() => setActiveAddQtyLineId(null)}
+                                />
+                              </React.Fragment>
                             )}
                           </td>
                         )}
@@ -1541,7 +1566,7 @@ export function ProjectView() {
                         const ws = wb.Sheets[sheetName];
                         if (!ws) return null;
 
-                        const dataRows = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1 });
+                        const dataRows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1 });
                         const options = [];
                         const startRowIdx = Math.max(0, importConfig.dataStartRow - 1);
 
@@ -1717,7 +1742,7 @@ export function ProjectView() {
                   <button 
                     onClick={() => {
                       removeSublist(listToDelete.id);
-                      if (activeView === listToDelete.id) setActiveView('Globale');
+                      if (activeView === listToDelete.id) selectView('Globale');
                       setListToDelete(null);
                     }}
                     className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm transition-colors shadow-sm"
@@ -1778,49 +1803,62 @@ export function ProjectView() {
                     Raccourcis clavier
                   </h3>
                   <button
-                    onClick={() => setShowShortcutsModal(false)}
+                    onClick={() => {
+                      setCapturingShortcut(null);
+                      setShowShortcutsModal(false);
+                    }}
                     className="text-slate-400 hover:text-slate-600"
                   >
                     <X className="w-5 h-5" />
                   </button>
                 </div>
-                <div className="p-6 space-y-3 max-h-[70vh] overflow-y-auto">
-                  <div className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-2.5 items-center text-sm">
-                    <kbd className="px-2.5 py-1 bg-slate-100 border border-slate-300 rounded-md font-mono font-semibold text-slate-800 shadow-sm text-xs justify-self-start">A</kbd>
-                    <span className="text-slate-700">Ajouter une nouvelle référence (focus sur le champ)</span>
-
-                    <kbd className="px-2.5 py-1 bg-slate-100 border border-slate-300 rounded-md font-mono font-semibold text-slate-800 shadow-sm text-xs justify-self-start">E</kbd>
-                    <span className="text-slate-700">Ajouter une quantité à la référence sélectionnée (+ ...)</span>
-
-                    <kbd className="px-2.5 py-1 bg-slate-100 border border-slate-300 rounded-md font-mono font-semibold text-slate-800 shadow-sm text-xs justify-self-start">T</kbd>
-                    <span className="text-slate-700">Changer le mode de tri (Réf/Fab ↔ Date d'ajout)</span>
-
-                    <div className="col-span-2 border-t border-slate-100 my-1"></div>
-
-                    <kbd className="px-2.5 py-1 bg-slate-100 border border-slate-300 rounded-md font-mono font-semibold text-slate-800 shadow-sm text-xs justify-self-start">↑ / ↓</kbd>
-                    <span className="text-slate-700">Sélectionner la référence précédente / suivante</span>
-
-                    <kbd className="px-2.5 py-1 bg-slate-100 border border-slate-300 rounded-md font-mono font-semibold text-slate-800 shadow-sm text-xs justify-self-start">+ / -</kbd>
-                    <span className="text-slate-700">Incrémenter (+1) ou décrémenter (-1) la quantité</span>
-
-                    <kbd className="px-2.5 py-1 bg-slate-100 border border-slate-300 rounded-md font-mono font-semibold text-slate-800 shadow-sm text-xs justify-self-start">Suppr</kbd>
-                    <span className="text-slate-700">Supprimer la référence sélectionnée</span>
-
-                    <div className="col-span-2 border-t border-slate-100 my-1"></div>
-
-                    <kbd className="px-2.5 py-1 bg-slate-100 border border-slate-300 rounded-md font-mono font-semibold text-slate-800 shadow-sm text-xs justify-self-start">/</kbd>
-                    <span className="text-slate-700">Rechercher une référence</span>
-
-                    <kbd className="px-2.5 py-1 bg-slate-100 border border-slate-300 rounded-md font-mono font-semibold text-slate-800 shadow-sm text-xs justify-self-start">?</kbd>
-                    <span className="text-slate-700">Afficher cette aide des raccourcis</span>
-
-                    <kbd className="px-2.5 py-1 bg-slate-100 border border-slate-300 rounded-md font-mono font-semibold text-slate-800 shadow-sm text-xs justify-self-start">Échap</kbd>
-                    <span className="text-slate-700">Fermer les fenêtres / Désélectionner</span>
+                <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                  <p className="text-sm text-slate-600">Cliquez sur un raccourci, puis appuyez sur la touche ou combinaison souhaitée.</p>
+                  {shortcutError && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{shortcutError}</p>}
+                  <div className="space-y-2">
+                    {SHORTCUT_ACTIONS.map(action => (
+                      <div key={action} className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 px-3 py-2.5">
+                        <span className="text-sm text-slate-700">{SHORTCUT_LABELS[action]}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShortcutError(null);
+                            setCapturingShortcut(action);
+                          }}
+                          className={`min-w-28 rounded-md border px-2.5 py-1 font-mono text-xs font-semibold transition-colors ${capturingShortcut === action ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-300 bg-slate-100 text-slate-800 hover:bg-slate-200'}`}
+                        >
+                          {capturingShortcut === action ? 'Appuyez…' : formatShortcut(shortcutBindings[action])}
+                        </button>
+                      </div>
+                    ))}
                   </div>
+                  {capturingShortcut && (
+                    <button
+                      type="button"
+                      onClick={() => setCapturingShortcut(null)}
+                      className="text-sm font-medium text-slate-600 hover:text-slate-900"
+                    >
+                      Annuler la capture
+                    </button>
+                  )}
                 </div>
-                <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex justify-end">
+                <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3">
                   <button
-                    onClick={() => setShowShortcutsModal(false)}
+                    type="button"
+                    onClick={() => {
+                      void setShortcutBindings(DEFAULT_SHORTCUT_BINDINGS);
+                      setCapturingShortcut(null);
+                      setShortcutError(null);
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-white rounded-md transition-colors"
+                  >
+                    Réinitialiser
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCapturingShortcut(null);
+                      setShowShortcutsModal(false);
+                    }}
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors"
                   >
                     Fermer

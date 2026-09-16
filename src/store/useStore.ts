@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { Project, BOMLine, Manufacturer, ComponentRef, Sublist, Category, Filiale, ChargeAffaire } from '../types';
-import { mockManufacturers, mockReferences, mockProjects } from '../mockData';
+import { Project, BOMLine, Manufacturer, Sublist, Category, Filiale, ChargeAffaire, ShortcutBindings, ProjectFileData } from '../types';
+import { mockManufacturers } from '../mockData';
+import { DEFAULT_SHORTCUT_BINDINGS, mergeShortcutBindings } from '../shortcuts';
 
 export type RecentFile = { id: string, path: string, tech: string, nomAffaire?: string, nomTableau?: string, lastOpened: number };
 
@@ -16,6 +17,7 @@ interface AppState {
   dbFilePath: string | null;
   recentFiles: RecentFile[];
   defaultTechName: string;
+  shortcutBindings: ShortcutBindings;
   
   isLoaded: boolean;
   loadState: () => Promise<void>;
@@ -23,6 +25,7 @@ interface AppState {
   saveState: () => Promise<void>;
   setDbFilePath: (path: string) => Promise<void>;
   setDefaultTechName: (name: string) => Promise<void>;
+  setShortcutBindings: (bindings: ShortcutBindings) => Promise<void>;
   
   addSublist: (sublist: Omit<Sublist, 'id'>) => Promise<void>;
   removeSublist: (id: string) => Promise<void>;
@@ -39,57 +42,7 @@ interface AppState {
   updateBOMLineQte: (id: string, quantity: number) => Promise<void>;
   updateBOMLineRef: (id: string, ref: string) => Promise<void>;
 
-  importBOMData: (projectId: string, data: any[]) => Promise<void>;
-}
-
-declare global {
-  interface Window {
-    electronAPI?: {
-      getManufacturers: () => Promise<Manufacturer[]>;
-      searchReferences: (query: string, fabCode?: string) => Promise<ComponentRef[]>;
-      getReference: (ref: string) => Promise<ComponentRef | null>;
-      selectDbFile: () => Promise<string | null>;
-      openProjectFile: () => Promise<{ filePath: string, data: any } | { error: string } | null>;
-      openProjectByPath: (filePath: string) => Promise<{ filePath: string, data: any } | { error: string }>;
-      saveNewProjectFile: (data: any, defaultFilename?: string) => Promise<string | { error: string } | null>;
-      saveProjectByPath: (filePath: string, data: any) => Promise<{ success: boolean; error?: string }>;
-      exportExcelAuto: (listFilePath: string, filename: string, base64Data: string) => Promise<{ success: boolean; filePath?: string; error?: string; cancelled?: boolean }>;
-      exportPdfAuto: (listFilePath: string, filename: string, base64Data: string) => Promise<{ success: boolean; filePath?: string; error?: string; cancelled?: boolean }>;
-      saveConfig: (config: any) => Promise<any>;
-      loadConfig: () => Promise<any>;
-      verifyAdminPassword: (password: string) => Promise<boolean>;
-      updateAdminPassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
-      
-      previewExcelCatalog: () => Promise<{ success: boolean; filePath?: string; schema?: Record<string, { id: string; label: string }[]>; error?: string }>;
-      importExcelCatalog: (filePath: string, mapping: any) => Promise<{ success: boolean; error?: string }>;
-      getPaginatedReferences: (page: number, pageSize: number, search: string) => Promise<{ items: ComponentRef[]; total: number }>;
-      addReference: (data: Omit<ComponentRef, 'weight'> & { weight?: number }) => Promise<{ success: boolean; error?: string }>;
-      updateReference: (oldRef: string, data: Omit<ComponentRef, 'weight'> & { weight?: number }) => Promise<{ success: boolean; error?: string }>;
-      deleteReference: (ref: string) => Promise<{ success: boolean; error?: string }>;
-      addManufacturer: (data: Manufacturer) => Promise<{ success: boolean; error?: string }>;
-      updateManufacturer: (oldCode: string, data: Manufacturer) => Promise<{ success: boolean; error?: string }>;
-      deleteManufacturer: (code: string) => Promise<{ success: boolean; error?: string }>;
-      
-      getFiliales: () => Promise<Filiale[]>;
-      addFiliale: (data: { name: string }) => Promise<{ success: boolean; id?: number; error?: string }>;
-      updateFiliale: (id: number, data: { name: string }) => Promise<{ success: boolean; error?: string }>;
-      deleteFiliale: (id: number) => Promise<{ success: boolean; error?: string }>;
-
-      getChargeAffaires: () => Promise<ChargeAffaire[]>;
-      addChargeAffaire: (data: { filiale_id: number; name: string }) => Promise<{ success: boolean; id?: number; error?: string }>;
-      deleteChargeAffaire: (id: number) => Promise<{ success: boolean; error?: string }>;
-      openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
-      
-      // Auto-Update
-      checkForUpdates: () => Promise<void>;
-      quitAndInstall: () => Promise<void>;
-      onUpdateAvailable: (callback: (event: any, info: any) => void) => void;
-      onDownloadProgress: (callback: (event: any, progressObj: any) => void) => void;
-      onUpdateDownloaded: (callback: (event: any, info: any) => void) => void;
-      onUpdateError: (callback: (event: any, error: string) => void) => void;
-      removeAllUpdateListeners: () => void;
-    };
-  }
+  importBOMData: (projectId: string, data: Array<Record<string, unknown>>) => Promise<void>;
 }
 
 const LOCAL_STORAGE_KEY = 'bom-app-data';
@@ -106,6 +59,7 @@ export const useStore = create<AppState>((set, get) => ({
   dbFilePath: null,
   recentFiles: [],
   defaultTechName: 'Technicien BE',
+  shortcutBindings: DEFAULT_SHORTCUT_BINDINGS,
   isLoaded: false,
 
   setDbFilePath: async (path) => {
@@ -123,13 +77,20 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
+  setShortcutBindings: async (shortcutBindings) => {
+    set({ shortcutBindings });
+    if (window.electronAPI) {
+      await window.electronAPI.saveConfig({ shortcutBindings });
+    }
+  },
+
   saveState: async () => {
     const state = get();
     const { currentProjectId, currentProjectPath } = state;
 
     if (!currentProjectId) return;
 
-    const projectData = {
+    const projectData: ProjectFileData = {
       project: state.currentProject,
       sublists: state.sublists.filter(s => s.projectId === currentProjectId),
       bomLines: state.bomLines.filter(l => l.projectId === currentProjectId)
@@ -149,7 +110,6 @@ export const useStore = create<AppState>((set, get) => ({
 
   loadState: async () => {
     try {
-      let manufacturers = mockManufacturers || [];
       if (window.electronAPI) {
         const manufPromise = window.electronAPI.getManufacturers();
         const filialesPromise = window.electronAPI.getFiliales();
@@ -165,6 +125,7 @@ export const useStore = create<AppState>((set, get) => ({
           recentFiles: config?.recentFiles || [],
           dbFilePath: config?.dbFilePath || null,
           defaultTechName: config?.defaultTechName || 'Technicien BE',
+          shortcutBindings: mergeShortcutBindings(config?.shortcutBindings),
           isLoaded: true
         });
       } else {
@@ -462,19 +423,19 @@ export const useStore = create<AppState>((set, get) => ({
 
   importBOMData: async (projectId, data) => {
       const state = get();
-      let updatedLines = [...state.bomLines];
+      const updatedLines = [...state.bomLines];
 
       data.forEach(item => {
-          const ref = item['Référence'] || item['Reference'] || item['Ref'];
-          if(!ref || ref === '-' || String(ref).trim() === '') return;
+          const ref = String(item['Référence'] ?? item['Reference'] ?? item['Ref'] ?? '').trim();
+          if(!ref || ref === '-') return;
           
           const rawQty = item['Quantité'] !== undefined ? item['Quantité'] : (item['Qte'] !== undefined ? item['Qte'] : (item['Qty'] !== undefined ? item['Qty'] : 1));
           let qty = parseFloat(String(rawQty).replace(',', '.'));
           if (isNaN(qty)) qty = 1;
 
           const category = item['Catégorie'] || item['Phase'] || 'Autre';
-          const sublistId = item['_sublistId'] || ''; 
-          const location = item['Localisation'] || item['Tableau'] || '';
+          const sublistId = String(item['_sublistId'] ?? '');
+          const location = String(item['Localisation'] ?? item['Tableau'] ?? '');
 
           const existingLineIndex = updatedLines.findIndex(
             (l) => l.projectId === projectId && 
@@ -498,4 +459,3 @@ export const useStore = create<AppState>((set, get) => ({
       await get().saveState();
   }
 }));
-

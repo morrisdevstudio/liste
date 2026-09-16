@@ -1,8 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
-import { BOMLine, ComponentRef, Manufacturer, Project } from '../types';
-import { format } from 'date-fns';
+import { BOMLine, Project } from '../types';
 
 type AggregatedBOMLine = BOMLine & {
   designation: string;
@@ -142,7 +141,7 @@ export const ExportService = {
           }
         }
       },
-      didDrawPage: (data) => {
+      didDrawPage: () => {
         // Footer drawn on each page
         const str = `${doc.getNumberOfPages()}/` + totalPagesExp;
         doc.setFont("helvetica", "normal");

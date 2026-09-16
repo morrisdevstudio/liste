@@ -5,6 +5,9 @@ import { fileURLToPath } from 'url';
 import Database from 'better-sqlite3';
 import * as xlsx from 'xlsx';
 import { autoUpdater } from 'electron-updater';
+import type { AppConfig, CatalogImportMapping, ComponentRef, Manufacturer, ProjectFileData } from '../src/types';
+
+const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
 
 const _filename = fileURLToPath(import.meta.url);
 const _dirname = path.dirname(_filename);
@@ -23,7 +26,7 @@ function getDb(forceDbPath?: string): Database.Database {
         const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
         if (config.dbFilePath) dbPath = config.dbFilePath;
       }
-    } catch (e) {}
+    } catch {}
   }
 
   if (!dbPath) {
@@ -35,7 +38,7 @@ function getDb(forceDbPath?: string): Database.Database {
   }
 
   if (db) {
-    try { db.close(); } catch(e) {}
+    try { db.close(); } catch {}
   }
 
   const dbDir = path.dirname(dbPath);
@@ -167,7 +170,7 @@ ipcMain.handle('get-manufacturers', async () => {
 ipcMain.handle('search-references', async (_event, query: string, fabCode?: string) => {
   try {
     let sql = 'SELECT * FROM references_data WHERE (ref LIKE ? OR designation LIKE ?)';
-    const params: any[] = [`%${query}%`, `%${query}%`];
+    const params: string[] = [`%${query}%`, `%${query}%`];
     
     if (fabCode) {
       sql += ' AND fabCode = ?';
@@ -185,7 +188,7 @@ ipcMain.handle('search-references', async (_event, query: string, fabCode?: stri
 ipcMain.handle('get-reference', async (_event, ref: string) => {
   try {
     return getDb().prepare('SELECT * FROM references_data WHERE ref = ?').get(ref);
-  } catch (error) {
+  } catch {
     return null;
   }
 });
@@ -204,8 +207,8 @@ ipcMain.handle('add-filiale', async (_event, data: { name: string }) => {
     const stmt = getDb().prepare('INSERT INTO filiales (name) VALUES (?)');
     const info = stmt.run(data.name);
     return { success: true, id: info.lastInsertRowid };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error) {
+    return { success: false, error: errorMessage(error) };
   }
 });
 
@@ -213,8 +216,8 @@ ipcMain.handle('update-filiale', async (_event, id: number, data: { name: string
   try {
     getDb().prepare('UPDATE filiales SET name = ? WHERE id = ?').run(data.name, id);
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error) {
+    return { success: false, error: errorMessage(error) };
   }
 });
 
@@ -222,8 +225,8 @@ ipcMain.handle('delete-filiale', async (_event, id: number) => {
   try {
     getDb().prepare('DELETE FROM filiales WHERE id = ?').run(id);
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error) {
+    return { success: false, error: errorMessage(error) };
   }
 });
 
@@ -241,8 +244,8 @@ ipcMain.handle('add-charge-affaire', async (_event, data: { filiale_id: number; 
     const stmt = getDb().prepare('INSERT INTO charge_affaires (filiale_id, name) VALUES (?, ?)');
     const info = stmt.run(data.filiale_id, data.name);
     return { success: true, id: info.lastInsertRowid };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error) {
+    return { success: false, error: errorMessage(error) };
   }
 });
 
@@ -250,8 +253,8 @@ ipcMain.handle('delete-charge-affaire', async (_event, id: number) => {
   try {
     getDb().prepare('DELETE FROM charge_affaires WHERE id = ?').run(id);
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error) {
+    return { success: false, error: errorMessage(error) };
   }
 });
 
@@ -296,7 +299,7 @@ ipcMain.handle('open-project-by-path', async (_event, filePath: string) => {
   }
 });
 
-ipcMain.handle('save-new-project-file', async (_event, data: any, defaultFilename?: string) => {
+ipcMain.handle('save-new-project-file', async (_event, data: ProjectFileData, defaultFilename?: string) => {
   const result = await dialog.showSaveDialog(mainWindow!, {
     defaultPath: defaultFilename,
     filters: [{ name: 'Fichiers Liste', extensions: ['list'] }]
@@ -305,17 +308,17 @@ ipcMain.handle('save-new-project-file', async (_event, data: any, defaultFilenam
   try {
     fs.writeFileSync(result.filePath, JSON.stringify(data, null, 2));
     return result.filePath;
-  } catch (error: any) {
-    return { error: error.message };
+  } catch (error) {
+    return { error: errorMessage(error) };
   }
 });
 
-ipcMain.handle('save-project-by-path', async (_event, filePath: string, data: any) => {
+ipcMain.handle('save-project-by-path', async (_event, filePath: string, data: ProjectFileData) => {
   try {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error) {
+    return { success: false, error: errorMessage(error) };
   }
 });
 
@@ -355,9 +358,9 @@ ipcMain.handle('export-excel-auto', async (_event, listFilePath: string, filenam
     }
 
     return { success: true, filePath: destPath };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error auto-exporting excel:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: errorMessage(error) };
   }
 });
 
@@ -397,17 +400,17 @@ ipcMain.handle('export-pdf-auto', async (_event, listFilePath: string, filename:
     }
 
     return { success: true, filePath: destPath };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error auto-exporting pdf:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: errorMessage(error) };
   }
 });
 
-ipcMain.handle('save-config', async (_event, config: any) => {
+ipcMain.handle('save-config', async (_event, config: Partial<AppConfig>) => {
   const configPath = path.join(app.getPath('userData'), 'config.json');
-  let existing = {};
+  let existing: AppConfig = {};
   if (fs.existsSync(configPath)) {
-    existing = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    existing = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as AppConfig;
   }
   const updated = { ...existing, ...config };
   fs.writeFileSync(configPath, JSON.stringify(updated, null, 2));
@@ -439,15 +442,15 @@ ipcMain.handle('update-admin-password', async (_event, newPassword: string) => {
     const db = getDb();
     db.prepare("UPDATE settings SET value = ? WHERE key = 'adminPassword'").run(newPassword);
     return { success: true };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error updating password:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: errorMessage(error) };
   }
 });
 
 // --- Catalog Administration IPCs ---
 
-ipcMain.handle('preview-excel-catalog', async (_event) => {
+ipcMain.handle('preview-excel-catalog', async () => {
   try {
     const result = await dialog.showOpenDialog(mainWindow!, {
       properties: ['openFile'],
@@ -460,11 +463,11 @@ ipcMain.handle('preview-excel-catalog', async (_event) => {
     let fileBuffer;
     try {
       fileBuffer = fs.readFileSync(filePath);
-    } catch (fsError: any) {
-      if (fsError.code === 'EBUSY' || fsError.code === 'EPERM') {
+    } catch (fsError) {
+      if (fsError instanceof Error && 'code' in fsError && (fsError.code === 'EBUSY' || fsError.code === 'EPERM')) {
         return { success: false, error: "Le fichier est ouvert dans un autre programme (ex: Excel). Veuillez le fermer avant de l'importer." };
       }
-      return { success: false, error: "Impossible de lire le fichier: " + fsError.message };
+      return { success: false, error: "Impossible de lire le fichier: " + errorMessage(fsError) };
     }
 
     const wb = xlsx.read(fileBuffer, { type: 'buffer' });
@@ -482,25 +485,25 @@ ipcMain.handle('preview-excel-catalog', async (_event) => {
 
     wb.SheetNames.forEach(sheetName => {
       const sheet = wb.Sheets[sheetName];
-      const data = xlsx.utils.sheet_to_json<any[]>(sheet, { header: 1 });
+      const data = xlsx.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
       if (data && data.length > 0) {
-        let headerRow = data[0] || [];
+        const headerRow = data[0] || [];
         let maxCols = 0;
         data.forEach(row => { if (row && row.length > maxCols) maxCols = row.length; });
         
-        let cols = [];
+        const cols: Array<{ id: string; label: string }> = [];
         for (let i = 0; i < maxCols; i++) {
-            let colLetter = getColumnLetter(i);
-            let h = headerRow[i];
+            const colLetter = getColumnLetter(i);
+            const h = headerRow[i];
             
-            let preview = [];
+            const preview: string[] = [];
             for (let r = 1; r <= 2; r++) {
                 if (data[r] && data[r][i] !== undefined && data[r][i] !== null && String(data[r][i]).trim() !== '') {
                     preview.push(String(data[r][i]).trim());
                 }
             }
-            let previewText = preview.length > 0 ? ` (Ex: ${preview.join(', ')})` : '';
-            let label = `[${colLetter}] ${h ? String(h).trim() : 'Colonne ' + colLetter}${previewText}`;
+            const previewText = preview.length > 0 ? ` (Ex: ${preview.join(', ')})` : '';
+            const label = `[${colLetter}] ${h ? String(h).trim() : 'Colonne ' + colLetter}${previewText}`;
             
             cols.push({ id: String(i), label });
         }
@@ -511,22 +514,22 @@ ipcMain.handle('preview-excel-catalog', async (_event) => {
     });
 
     return { success: true, filePath, schema };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error previewing catalog:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: errorMessage(error) };
   }
 });
 
-ipcMain.handle('import-excel-catalog', async (_event, filePath: string, mapping: any) => {
+ipcMain.handle('import-excel-catalog', async (_event, filePath: string, mapping: CatalogImportMapping) => {
   try {
     let fileBuffer;
     try {
       fileBuffer = fs.readFileSync(filePath);
-    } catch (fsError: any) {
-      if (fsError.code === 'EBUSY' || fsError.code === 'EPERM') {
+    } catch (fsError) {
+      if (fsError instanceof Error && 'code' in fsError && (fsError.code === 'EBUSY' || fsError.code === 'EPERM')) {
         return { success: false, error: "Le fichier est ouvert dans un autre programme (ex: Excel). Veuillez le fermer avant de l'importer." };
       }
-      return { success: false, error: "Impossible de lire le fichier: " + fsError.message };
+      return { success: false, error: "Impossible de lire le fichier: " + errorMessage(fsError) };
     }
 
     const wb = xlsx.read(fileBuffer, { type: 'buffer' });
@@ -538,7 +541,7 @@ ipcMain.handle('import-excel-catalog', async (_event, filePath: string, mapping:
         const sheetName = mapping.manufacturers.sheet;
         if (wb.SheetNames.includes(sheetName)) {
            const sheet = wb.Sheets[sheetName];
-           const data = xlsx.utils.sheet_to_json<any[]>(sheet, { header: 1 });
+           const data = xlsx.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
            
            const validRows = [];
            for (let r = 1; r < data.length; r++) {
@@ -565,7 +568,7 @@ ipcMain.handle('import-excel-catalog', async (_event, filePath: string, mapping:
         const sheetName = mapping.references.sheet;
         if (wb.SheetNames.includes(sheetName)) {
            const sheet = wb.Sheets[sheetName];
-           const data = xlsx.utils.sheet_to_json<any[]>(sheet, { header: 1 });
+           const data = xlsx.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
            
            const validRows = [];
            for (let r = 1; r < data.length; r++) {
@@ -608,9 +611,9 @@ ipcMain.handle('import-excel-catalog', async (_event, filePath: string, mapping:
 
     transaction();
     return { success: true };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error importing catalog:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: errorMessage(error) };
   }
 });
 
@@ -619,7 +622,7 @@ ipcMain.handle('get-paginated-references', async (_event, page: number, pageSize
     const offset = (page - 1) * pageSize;
     let sql = 'SELECT * FROM references_data';
     let countSql = 'SELECT COUNT(*) as total FROM references_data';
-    const params: any[] = [];
+    const params: Array<string | number> = [];
     
     if (search && search.trim() !== '') {
       const query = `%${search.trim()}%`;
@@ -642,23 +645,23 @@ ipcMain.handle('get-paginated-references', async (_event, page: number, pageSize
 });
 
 // Basic CRUD for References
-ipcMain.handle('add-reference', async (_event, data: any) => {
+ipcMain.handle('add-reference', async (_event, data: ComponentRef) => {
   try {
     const stmt = getDb().prepare('INSERT INTO references_data (ref, designation, fabCode, weight) VALUES (?, ?, ?, ?)');
     stmt.run(data.ref, data.designation, data.fabCode, data.weight || null);
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error) {
+    return { success: false, error: errorMessage(error) };
   }
 });
 
-ipcMain.handle('update-reference', async (_event, oldRef: string, data: any) => {
+ipcMain.handle('update-reference', async (_event, oldRef: string, data: ComponentRef) => {
   try {
     const stmt = getDb().prepare('UPDATE references_data SET ref = ?, designation = ?, fabCode = ?, weight = ? WHERE ref = ?');
     stmt.run(data.ref, data.designation, data.fabCode, data.weight || null, oldRef);
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error) {
+    return { success: false, error: errorMessage(error) };
   }
 });
 
@@ -666,29 +669,29 @@ ipcMain.handle('delete-reference', async (_event, ref: string) => {
   try {
     getDb().prepare('DELETE FROM references_data WHERE ref = ?').run(ref);
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error) {
+    return { success: false, error: errorMessage(error) };
   }
 });
 
 // Basic CRUD for Manufacturers
-ipcMain.handle('add-manufacturer', async (_event, data: any) => {
+ipcMain.handle('add-manufacturer', async (_event, data: Manufacturer) => {
   try {
     const stmt = getDb().prepare('INSERT INTO manufacturers (code, name) VALUES (?, ?)');
     stmt.run(data.code, data.name);
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error) {
+    return { success: false, error: errorMessage(error) };
   }
 });
 
-ipcMain.handle('update-manufacturer', async (_event, oldCode: string, data: any) => {
+ipcMain.handle('update-manufacturer', async (_event, oldCode: string, data: Manufacturer) => {
   try {
     const stmt = getDb().prepare('UPDATE manufacturers SET code = ?, name = ? WHERE code = ?');
     stmt.run(data.code, data.name, oldCode);
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error) {
+    return { success: false, error: errorMessage(error) };
   }
 });
 
@@ -696,8 +699,8 @@ ipcMain.handle('delete-manufacturer', async (_event, code: string) => {
   try {
     getDb().prepare('DELETE FROM manufacturers WHERE code = ?').run(code);
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error) {
+    return { success: false, error: errorMessage(error) };
   }
 });
 
@@ -705,7 +708,7 @@ ipcMain.handle('open-external', async (_event, url: string) => {
   try {
     await shell.openExternal(url);
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error) {
+    return { success: false, error: errorMessage(error) };
   }
 });

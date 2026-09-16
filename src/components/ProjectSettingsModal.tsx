@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Plus, FolderOpen, Save } from 'lucide-react';
 import { Project } from '../types';
 import { useStore } from '../store/useStore';
@@ -14,7 +14,7 @@ export function ProjectSettingsModal({ initialData, isEditMode = false, onClose,
   const filiales = useStore(state => state.filiales);
   const chargeAffaires = useStore(state => state.chargeAffaires);
   const defaultTechName = useStore(state => state.defaultTechName);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState(() => ({
     techName: defaultTechName,
     filialeOrigine: '',
     affaireOrigine: '',
@@ -29,17 +29,9 @@ export function ProjectSettingsModal({ initialData, isEditMode = false, onClose,
     nomTableau: '',
     chargeAffaire: '',
     isSousTraitance: false,
-    isUF: false
-  });
-
-  useEffect(() => {
-    if (initialData) {
-      setFormData(prev => ({
-        ...prev,
-        ...initialData
-      }));
-    }
-  }, [initialData]);
+    isUF: false,
+    ...initialData
+  }));
 
   const handleChange = (field: string, value: string | boolean) => {
     setFormData(prev => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Search, Database, Plus, Edit2, Trash2, ArrowLeft, UploadCloud, ChevronLeft, ChevronRight, ChevronDown, FolderOpen, X, Info, Key, Lock, Unlock } from 'lucide-react';
 import { ComponentRef, Manufacturer, Filiale } from '../types';
 import { useStore } from '../store/useStore';
@@ -43,8 +43,8 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
   // Modal Item State
   const [showItemModal, setShowItemModal] = useState(false);
   const [itemMode, setItemMode] = useState<'add' | 'edit'>('add');
-  const [editingItem, setEditingItem] = useState<any>(null);
-  const [formData, setFormData] = useState<any>({});
+  const [editingItem, setEditingItem] = useState<ComponentRef | Manufacturer | Filiale | null>(null);
+  const [formData, setFormData] = useState<Partial<ComponentRef & Manufacturer & Filiale>>({});
   const [newCA, setNewCA] = useState('');
 
   // UI State
@@ -91,17 +91,7 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
     }
   };
 
-  useEffect(() => {
-    if (activeTab === 'references') {
-      fetchReferences();
-    } else if (activeTab === 'manufacturers') {
-      fetchManufacturers();
-    } else {
-      fetchFiliales();
-    }
-  }, [activeTab, refPage, refSearch, manufSearch, filialeSearch]);
-
-  const fetchReferences = async () => {
+  const fetchReferences = useCallback(async () => {
     if (!window.electronAPI) return;
     setLoading(true);
     try {
@@ -113,9 +103,9 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [refPage, refSearch]);
 
-  const fetchManufacturers = async () => {
+  const fetchManufacturers = useCallback(async () => {
     if (!window.electronAPI) return;
     setLoading(true);
     try {
@@ -126,9 +116,9 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchFiliales = async () => {
+  const fetchFiliales = useCallback(async () => {
     if (!window.electronAPI) return;
     setLoading(true);
     try {
@@ -139,7 +129,13 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const loader = activeTab === 'references' ? fetchReferences : activeTab === 'manufacturers' ? fetchManufacturers : fetchFiliales;
+    const timer = window.setTimeout(() => void loader(), 0);
+    return () => window.clearTimeout(timer);
+  }, [activeTab, fetchFiliales, fetchManufacturers, fetchReferences, filialeSearch, manufSearch]);
 
   const handlePreviewExcel = async () => {
     if (!window.electronAPI) return;
@@ -231,7 +227,7 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
     } else setErrorMsg('Erreur : ' + res?.error);
   };
 
-  const handleOpenItemModal = (mode: 'add' | 'edit', item?: any) => {
+  const handleOpenItemModal = (mode: 'add' | 'edit', item?: ComponentRef | Manufacturer | Filiale) => {
     setItemMode(mode);
     setEditingItem(item || null);
     setNewCA('');
@@ -271,7 +267,7 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
     setLoading(true);
     try {
       if (activeTab === 'references') {
-        const data = { ...formData, weight: parseFloat(formData.weight) || undefined };
+        const data: ComponentRef = { ref: formData.ref || '', designation: formData.designation || '', fabCode: formData.fabCode || '', weight: typeof formData.weight === 'number' ? formData.weight : undefined };
         let res;
         if (itemMode === 'add') res = await window.electronAPI.addReference(data);
         else res = await window.electronAPI.updateReference(editingItem.ref, data);
@@ -282,8 +278,9 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
         } else setErrorMsg("Erreur: " + res.error);
       } else if (activeTab === 'manufacturers') {
         let res;
-        if (itemMode === 'add') res = await window.electronAPI.addManufacturer(formData);
-        else res = await window.electronAPI.updateManufacturer(editingItem.code, formData);
+        const data: Manufacturer = { code: formData.code || '', name: formData.name || '' };
+        if (itemMode === 'add') res = await window.electronAPI.addManufacturer(data);
+        else res = await window.electronAPI.updateManufacturer((editingItem as Manufacturer).code, data);
         
         if (res.success) {
           setShowItemModal(false);
@@ -292,8 +289,9 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
         } else setErrorMsg("Erreur: " + res.error);
       } else {
         let res;
-        if (itemMode === 'add') res = await window.electronAPI.addFiliale(formData);
-        else res = await window.electronAPI.updateFiliale(editingItem.id, formData);
+        const data = { name: formData.name || '' };
+        if (itemMode === 'add') res = await window.electronAPI.addFiliale(data);
+        else res = await window.electronAPI.updateFiliale((editingItem as Filiale).id || 0, data);
         
         if (res.success) {
           setShowItemModal(false);
