@@ -1,7 +1,7 @@
 {
   "name": "liste-app",
   "private": true,
-  "version": "1.0.10",
+  "version": "1.0.11",
   "repository": {
     "type": "git",
     "url": "https://github.com/morrisdevstudio/liste.git"
@@ -15,6 +15,7 @@
     "electron:build": "vite build && electron-builder",
     "electron:release": "vite build && electron-builder --publish always",
     "preview": "vite preview",
+    "db:test": "electron scripts/create-test-db.cjs",
     "clean": "rm -rf dist dist-electron",
     "lint": "eslint src electron --ext .ts,.tsx && tsc --noEmit"
   },

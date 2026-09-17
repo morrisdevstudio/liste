@@ -1068,10 +1068,7 @@ export function ProjectView() {
 
         {/* Header */}
         <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shrink-0">
-          <h1 className="text-xl font-bold text-slate-800">
-            {activeView === 'Globale' ? 'Liste globale' : activeView === 'EtatPrepa' ? 'État préparatoire' : activeView === 'Chiffrage' ? 'Chiffrage' : projectSublists.find(s => s.id === activeView)?.name || 'Vue'}
-          </h1>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => updateListViewPreferences({ topPanelCollapsed: true })}
@@ -1080,6 +1077,11 @@ export function ProjectView() {
             >
               <ChevronUp className="w-4 h-4" />
             </button>
+            <h1 className="text-xl font-bold text-slate-800">
+              {activeView === 'Globale' ? 'Liste globale' : activeView === 'EtatPrepa' ? 'État préparatoire' : activeView === 'Chiffrage' ? 'Chiffrage' : projectSublists.find(s => s.id === activeView)?.name || 'Vue'}
+            </h1>
+          </div>
+          <div className="flex items-center gap-3">
             <button
               onClick={() => {
                 const subName = activeView === 'Globale' ? 'Liste globale' : activeView === 'EtatPrepa' ? 'État préparatoire' : activeView === 'Chiffrage' ? 'Chiffrage' : projectSublists.find(s => s.id === activeView)?.name || 'Vue';
@@ -1570,7 +1572,15 @@ export function ProjectView() {
                 Afficher l'import
               </button>
             ) : (
-              <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+              <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center gap-3 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => updateListViewPreferences({ bottomPanelCollapsed: true })}
+                  className="p-2 text-slate-500 hover:bg-slate-200 rounded-md transition-colors shrink-0"
+                  title="Replier la zone d'import"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                </button>
                 <input
                   type="file"
                   multiple
@@ -1600,14 +1610,6 @@ export function ProjectView() {
                     Importer
                   </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => updateListViewPreferences({ bottomPanelCollapsed: true })}
-                  className="p-2 text-slate-500 hover:bg-slate-200 rounded-md transition-colors"
-                  title="Replier la zone d'import"
-                >
-                  <ChevronDown className="w-4 h-4" />
-                </button>
               </div>
             ))}
           </div>

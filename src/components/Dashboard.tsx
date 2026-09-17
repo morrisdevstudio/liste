@@ -143,10 +143,18 @@ export function Dashboard({ onOpenAdmin }: DashboardProps) {
           </h3>
           <div className="space-y-2">
             {recentFiles.map((file, idx) => (
-              <button
+              <div
                 key={`${file.path}-${idx}`}
                 onClick={() => openProjectByPath(file.path)}
-                className="w-full text-left flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all group"
+                onKeyDown={e => {
+                  if ((e.key === 'Enter' || e.key === ' ') && e.currentTarget === e.target) {
+                    e.preventDefault();
+                    void openProjectByPath(file.path);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                className="w-full text-left flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-colors group cursor-pointer"
               >
                 <div className="flex items-center gap-4">
                   <div className="bg-blue-50 p-2 rounded-lg text-blue-600 group-hover:bg-blue-100 transition-colors">
@@ -156,15 +164,27 @@ export function Dashboard({ onOpenAdmin }: DashboardProps) {
                     <h4 className="font-bold text-slate-800 group-hover:text-blue-700 transition-colors">
                       {file.nomAffaire ? `${file.nomAffaire} — ${file.nomTableau}` : file.id}
                     </h4>
-                    <p className="text-xs text-slate-500 truncate">
-                      {file.nomAffaire ? `N° ${file.id} • ` : ''}{file.tech} • {file.path}
-                    </p>
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                      <span>{file.nomAffaire ? `N° ${file.id} • ` : ''}{file.tech} •</span>
+                      <button
+                        type="button"
+                        onClick={e => {
+                          e.stopPropagation();
+                          void window.electronAPI?.showProjectInFolder(file.path);
+                        }}
+                        className="inline-flex min-h-8 items-center gap-1 rounded-md px-2 text-blue-600 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                        title="Ouvrir l'emplacement du fichier"
+                      >
+                        <FolderOpen className="w-3.5 h-3.5" />
+                        Ouvrir l'emplacement
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div className="text-xs text-slate-400 font-medium whitespace-nowrap ml-4">
                   {new Date(file.lastOpened).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         </div>
