@@ -750,3 +750,15 @@ ipcMain.handle('open-external', async (_event, url: string) => {
     return { success: false, error: errorMessage(error) };
   }
 });
+
+ipcMain.handle('show-project-in-folder', async (_event, filePath: string) => {
+  try {
+    if (!path.isAbsolute(filePath) || path.extname(filePath).toLowerCase() !== '.list' || !fs.existsSync(filePath)) {
+      return { success: false, error: 'Fichier liste introuvable.' };
+    }
+    shell.showItemInFolder(filePath);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: errorMessage(error) };
+  }
+});

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useStore } from '../store/useStore';
-import { ArrowLeft, Upload, Plus, Download, FileText, Search, Trash2, Minus, ChevronDown, ChevronLeft, ChevronUp, Menu, Settings, ArrowUpDown, Calendar, ClipboardList, Sliders, MoreHorizontal, HelpCircle, Keyboard, X } from 'lucide-react';
+import { ArrowLeft, Upload, Plus, Download, FileText, Search, Trash2, Minus, ChevronDown, ChevronLeft, ChevronUp, Menu, Settings, ArrowUpDown, Calendar, ClipboardList, Sliders, MoreHorizontal, HelpCircle, Keyboard, X, FolderOpen } from 'lucide-react';
 import { ProjectSettingsModal } from './ProjectSettingsModal';
 import { ComponentRef, ListViewPreferences, Project, ShortcutAction } from '../types';
 import * as XLSX from 'xlsx';
@@ -817,6 +817,11 @@ export function ProjectView() {
                 <p className="text-xs text-slate-500 truncate" title={project.client ? `Client: ${project.client}` : ''}>
                   {project.client ? `${project.client} • ` : ''}{project.techName}
                 </p>
+                {currentProjectPath && (
+                  <p className="mt-1 text-xs text-slate-400 truncate" title={currentProjectPath}>
+                    {currentProjectPath}
+                  </p>
+                )}
               </div>
               <button
                 onClick={() => setIsSettingsOpen(true)}
@@ -917,7 +922,45 @@ export function ProjectView() {
 
         </div>
 
-        <div className={`border-t border-slate-200 p-3 shrink-0 ${isSidebarOpen ? '' : 'flex justify-center'}`}>
+        <div className={`relative border-t border-slate-200 p-3 shrink-0 ${isSidebarOpen ? '' : 'flex justify-center'}`}>
+          {showDisplayMenu && (
+            <div className="absolute bottom-full left-3 right-3 mb-2 w-56 bg-white border border-slate-200 rounded-xl shadow-xl z-30 p-3 space-y-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Densité des lignes</p>
+              <div className="space-y-1">
+                {([
+                  ['comfortable', 'Confort'],
+                  ['compact', 'Compact'],
+                  ['dense', 'Très compact'],
+                ] as const).map(([density, label]) => (
+                  <button
+                    key={density}
+                    onClick={() => updateListViewPreferences({ density })}
+                    className={`w-full rounded-md px-2 py-1.5 text-left text-sm ${listViewPreferences.density === density ? 'bg-blue-50 font-medium text-blue-700' : 'text-slate-700 hover:bg-slate-50'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {isSidebarOpen && currentProjectPath && (
+            <button
+              onClick={() => void window.electronAPI?.showProjectInFolder(currentProjectPath)}
+              className="w-full mb-1 px-3 py-2 rounded-md text-sm font-medium hover:bg-slate-100 flex items-center gap-2 transition-colors text-slate-600"
+              title="Ouvrir l'emplacement de la liste"
+            >
+              <FolderOpen className="w-4 h-4 shrink-0" />
+              <span>Ouvrir l'emplacement</span>
+            </button>
+          )}
+          <button
+            onClick={() => setShowDisplayMenu(!showDisplayMenu)}
+            className={`w-full px-3 py-2 rounded-md text-sm font-medium hover:bg-slate-100 flex items-center gap-2 transition-colors text-slate-600 ${isSidebarOpen ? '' : 'w-10 justify-center px-0'}`}
+            title="Paramètres de l'application"
+          >
+            <Settings className="w-4 h-4 shrink-0" />
+            {isSidebarOpen && <span>Paramètres</span>}
+          </button>
           <button
             onClick={() => {
               setShortcutError(null);
@@ -1029,6 +1072,14 @@ export function ProjectView() {
             {activeView === 'Globale' ? 'Liste globale' : activeView === 'EtatPrepa' ? 'État préparatoire' : activeView === 'Chiffrage' ? 'Chiffrage' : projectSublists.find(s => s.id === activeView)?.name || 'Vue'}
           </h1>
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => updateListViewPreferences({ topPanelCollapsed: true })}
+              className="p-2 text-slate-500 hover:bg-slate-100 rounded-md transition-colors"
+              title="Replier la zone haute"
+            >
+              <ChevronUp className="w-4 h-4" />
+            </button>
             <button
               onClick={() => {
                 const subName = activeView === 'Globale' ? 'Liste globale' : activeView === 'EtatPrepa' ? 'État préparatoire' : activeView === 'Chiffrage' ? 'Chiffrage' : projectSublists.find(s => s.id === activeView)?.name || 'Vue';
@@ -1233,60 +1284,6 @@ export function ProjectView() {
                 </div>
               )}
 
-              <div className="relative">
-                <button
-                  onClick={() => setShowDisplayMenu(!showDisplayMenu)}
-                  className="px-3 py-2 border border-slate-300 rounded-md text-sm font-medium hover:bg-slate-50 flex items-center gap-2 transition-colors bg-white text-slate-700 shadow-sm"
-                  title="Réglages d'affichage"
-                >
-                  <Sliders className="w-4 h-4 text-slate-500" />
-                  Affichage
-                </button>
-                {showDisplayMenu && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-xl shadow-xl z-30 p-3 space-y-3">
-                    <div>
-                      <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Densité des lignes</p>
-                      <div className="space-y-1">
-                        {([
-                          ['comfortable', 'Confort'],
-                          ['compact', 'Compact'],
-                          ['dense', 'Très compact'],
-                        ] as const).map(([density, label]) => (
-                          <button
-                            key={density}
-                            onClick={() => updateListViewPreferences({ density })}
-                            className={`w-full rounded-md px-2 py-1.5 text-left text-sm ${listViewPreferences.density === density ? 'bg-blue-50 font-medium text-blue-700' : 'text-slate-700 hover:bg-slate-50'}`}
-                          >
-                            {label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="border-t border-slate-100 pt-2">
-                      <button
-                        onClick={() => {
-                          updateListViewPreferences({ topPanelCollapsed: true });
-                          setShowDisplayMenu(false);
-                        }}
-                        className="w-full rounded-md px-2 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-50"
-                      >
-                        Réduire la zone haute
-                      </button>
-                      {activeView !== 'Globale' && activeView !== 'EtatPrepa' && (
-                        <button
-                          onClick={() => {
-                            updateListViewPreferences({ bottomPanelCollapsed: true });
-                            setShowDisplayMenu(false);
-                          }}
-                          className="w-full rounded-md px-2 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-50"
-                        >
-                          Réduire la zone d'import
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
             </div>
           </div>
           )}
@@ -1573,7 +1570,7 @@ export function ProjectView() {
                 Afficher l'import
               </button>
             ) : (
-              <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end shrink-0">
+              <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
                 <input
                   type="file"
                   multiple
@@ -1603,6 +1600,14 @@ export function ProjectView() {
                     Importer
                   </button>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => updateListViewPreferences({ bottomPanelCollapsed: true })}
+                  className="p-2 text-slate-500 hover:bg-slate-200 rounded-md transition-colors"
+                  title="Replier la zone d'import"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                </button>
               </div>
             ))}
           </div>

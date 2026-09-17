@@ -156,6 +156,7 @@ export type ElectronApi = {
   addChargeAffaire: (data: { filiale_id: number; name: string }) => Promise<{ success: boolean; id?: number; error?: string }>;
   deleteChargeAffaire: (id: number) => Promise<{ success: boolean; error?: string }>;
   openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
+  showProjectInFolder: (filePath: string) => Promise<{ success: boolean; error?: string }>;
   checkForUpdates: () => Promise<void>;
   quitAndInstall: () => Promise<void>;
   onUpdateAvailable: (callback: (event: unknown, info: UpdateInfo) => void) => void;

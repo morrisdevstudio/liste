@@ -43,6 +43,7 @@ const electronAPI: ElectronApi = {
   addChargeAffaire: (data) => ipcRenderer.invoke('add-charge-affaire', data),
   deleteChargeAffaire: (id: number) => ipcRenderer.invoke('delete-charge-affaire', id),
   openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
+  showProjectInFolder: (filePath: string) => ipcRenderer.invoke('show-project-in-folder', filePath),
   
   // Auto-Update
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),

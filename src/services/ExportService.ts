@@ -71,16 +71,10 @@ export const ExportService = {
 
     // Table Column and Row mapping (ignoring weight)
     const tableRows = sortedLines.map(line => {
-      const row = [
-        line.fabCode || '',
-        line.manufacturer || '',
-        line.ref || '',
-        line.designation || ''
-      ];
+      let statusText = '';
       if (isEtatPrepa) {
         const total = line.quantity;
         const ord = line.orderedQty || 0;
-        let statusText = '';
         if (ord === total) {
           statusText = "Commandé";
         } else if (ord === 0) {
@@ -88,18 +82,21 @@ export const ExportService = {
         } else {
           statusText = `${Math.round(ord)} Commandé`;
         }
-        row.push(statusText);
       }
-      row.push(Math.round(line.quantity).toString());
-      return row;
+      return [
+        line.ref || '',
+        line.designation || '',
+        statusText,
+        Math.round(line.quantity).toString(),
+        line.fabCode || '',
+        line.manufacturer || ''
+      ];
     });
 
     const totalPagesExp = "{total_pages_count_string}";
 
     autoTable(doc, {
-      head: isEtatPrepa 
-        ? [["Code", "Fabricant", "Référence Produit", "Désignation", "Statut", "Quantité"]]
-        : [["Code", "Fabricant", "Référence Produit", "Désignation", "Quantité"]],
+      head: [["Référence", "Désignation", "Statut", "Quantité", "Code fab", "Fabricant"]],
       body: tableRows,
       startY: 52,
       margin: { left: margin, right: margin, bottom: 15 },
@@ -117,19 +114,13 @@ export const ExportService = {
         halign: 'center',
         lineColor: [0, 0, 0] // Black headers border!
       },
-      columnStyles: isEtatPrepa ? {
-        0: { cellWidth: 15, halign: 'center' }, // Code (Centered)
-        1: { cellWidth: 30 }, // Fabricant
-        2: { cellWidth: 29, halign: 'center', fontSize: 8 }, // Référence Produit (Optimized & Centered)
-        3: { cellWidth: 'auto' }, // Désignation (takes remaining width)
-        4: { cellWidth: 27, halign: 'center', fontSize: 8 }, // Statut (Centered)
-        5: { cellWidth: 20, halign: 'center' } // Quantité (Centered)
-      } : {
-        0: { cellWidth: 15, halign: 'center' }, // Code (Centered)
-        1: { cellWidth: 35 }, // Fabricant
-        2: { cellWidth: 29, halign: 'center', fontSize: 8 }, // Référence Produit (Optimized & Centered)
-        3: { cellWidth: 'auto' }, // Désignation (takes remaining width)
-        4: { cellWidth: 20, halign: 'center' } // Quantité (Centered)
+      columnStyles: {
+        0: { cellWidth: 30, halign: 'center', fontSize: 8 },
+        1: { cellWidth: 'auto' },
+        2: { cellWidth: 27, halign: 'center', fontSize: 8 },
+        3: { cellWidth: 20, halign: 'center' },
+        4: { cellWidth: 16, halign: 'center' },
+        5: { cellWidth: 30 }
       },
       theme: 'grid',
       didParseCell: (data) => {
