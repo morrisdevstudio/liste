@@ -33,6 +33,10 @@ const electronAPI: ElectronApi = {
   addManufacturer: (data) => ipcRenderer.invoke('add-manufacturer', data),
   updateManufacturer: (oldCode, data) => ipcRenderer.invoke('update-manufacturer', oldCode, data),
   deleteManufacturer: (code: string) => ipcRenderer.invoke('delete-manufacturer', code),
+  getComponentTypes: () => ipcRenderer.invoke('get-component-types'),
+  addComponentType: (data) => ipcRenderer.invoke('add-component-type', data),
+  updateComponentType: (id, data) => ipcRenderer.invoke('update-component-type', id, data),
+  deleteComponentType: (id: number) => ipcRenderer.invoke('delete-component-type', id),
   
   getFiliales: () => ipcRenderer.invoke('get-filiales'),
   addFiliale: (data) => ipcRenderer.invoke('add-filiale', data),
@@ -44,7 +48,51 @@ const electronAPI: ElectronApi = {
   deleteChargeAffaire: (id: number) => ipcRenderer.invoke('delete-charge-affaire', id),
   openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
   showProjectInFolder: (filePath: string) => ipcRenderer.invoke('show-project-in-folder', filePath),
-  
+
+  openPlanWindow: () => ipcRenderer.invoke('open-plan-window'),
+  closePlanWindow: () => ipcRenderer.invoke('close-plan-window'),
+  pushPlanState: (state) => ipcRenderer.send('plan-state', state),
+  onPlanWindowReady: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on('plan-window-ready', listener);
+    return () => ipcRenderer.removeListener('plan-window-ready', listener);
+  },
+  onPlanAction: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, action: Parameters<typeof callback>[0]) => callback(action);
+    ipcRenderer.on('plan-action', listener);
+    return () => ipcRenderer.removeListener('plan-action', listener);
+  },
+  onPlanState: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: Parameters<typeof callback>[0]) => callback(state);
+    ipcRenderer.on('plan-state', listener);
+    return () => ipcRenderer.removeListener('plan-state', listener);
+  },
+  sendPlanAction: (action) => ipcRenderer.send('plan-action', action),
+  notifyPlanWindowReady: () => ipcRenderer.send('plan-window-ready'),
+  selectPlanPdf: () => ipcRenderer.invoke('select-plan-pdf'),
+  copyPlanPdf: (projectPath, sourcePath, storedName) => ipcRenderer.invoke('copy-plan-pdf', projectPath, sourcePath, storedName),
+  deletePlanPdf: (projectPath, storedName) => ipcRenderer.invoke('delete-plan-pdf', projectPath, storedName),
+  readPlanPdf: async (projectPath, storedName) => {
+    const result = await ipcRenderer.invoke('read-plan-pdf', projectPath, storedName);
+    if (result?.data) {
+      const raw = result.data as ArrayBuffer | Uint8Array | { type?: string; data?: number[] };
+      let bytes: Uint8Array;
+      if (raw instanceof ArrayBuffer) {
+        bytes = new Uint8Array(raw);
+      } else if (ArrayBuffer.isView(raw)) {
+        bytes = new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
+      } else if (Array.isArray((raw as { data?: number[] }).data)) {
+        bytes = Uint8Array.from((raw as { data: number[] }).data);
+      } else {
+        return { error: 'Le fichier du plan est illisible.' };
+      }
+      const copy = new Uint8Array(bytes.byteLength);
+      copy.set(bytes);
+      return { data: copy.buffer };
+    }
+    return result;
+  },
+
   // Auto-Update
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   quitAndInstall: () => ipcRenderer.invoke('quit-and-install'),

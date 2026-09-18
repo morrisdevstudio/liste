@@ -34,6 +34,7 @@ export default defineConfig(({mode}) => {
         output: {
           manualChunks: {
             'vendor-pdf':   ['jspdf', 'jspdf-autotable'],
+            'vendor-pdfjs': ['pdfjs-dist'],
             'vendor-xlsx':  ['xlsx'],
             'vendor-react': ['react', 'react-dom'],
             'vendor-motion': ['motion'],

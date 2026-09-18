@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feuille de Pointage</title>
+
+    <!-- Importation de la police Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Script pour éviter le clignotement (FOUC) au chargement en mode sombre -->
+    <script>
+        if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark')
+        } else {
+            document.documentElement.classList.remove('dark')
+        }
+    </script>
+
+    <!-- Tailwind CSS pour le style visuel -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        'charte-jaune': '#ffed00',
+                        'charte-jaune-hover': '#e6d500',
+                        'charte-bg-sombre': '#131314',
+                        'charte-tuile-sombre': '#1e1f20'
+                    },
+                    fontFamily: { sans: ['Inter', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+
+    <!-- html2pdf pour l'export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
+    
+    <style>
+        /* Styles spécifiques pour le document A4 (ne pas convertir en Tailwind pour garantir l'impression) */
+        .page-wrapper {
+            width: 100%;
+            max-width: 210mm;
+            overflow-x: auto;
+            margin: 0 auto;
+            padding-bottom: 20px;
+        }
+
+        .a4-page {
+            width: 210mm;
+            height: 297mm;
+            background: white;
+            padding: 15mm 5mm;
+            box-sizing: border-box;
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+            position: relative;
+            overflow: hidden;
+            margin: 0 auto;
+            transition: background-color 0.2s, color 0.2s;
+        }
+
+        /* --- STYLES MODE SOMBRE POUR LE DOCUMENT A4 --- */
+        .dark .a4-page {
+            background-color: #1e1f20; /* charte-tuile-sombre */
+            color: #f1f5f9; /* slate-100 */
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.5);
+        }
+        .dark .main-frame { border-color: #94a3b8; }
+        .dark .inner-frame { border-color: #64748b; }
+        .dark .title-section { border-bottom-color: #94a3b8; }
+        .dark th, .dark td { border-color: #475569; }
+        .dark .semaine-header { border-bottom-color: #475569; }
+        .dark input[type="text"]:focus:not(:read-only),
+        .dark input[type="number"]:focus:not(:read-only),
+        .dark select.select-motif:focus {
+            background: rgba(255, 237, 0, 0.1); /* focus charte-jaune */
+        }
+        .dark .bg-gray-input { background-color: #252627 !important; }
+        .dark .col-today { background-color: rgba(255, 237, 0, 0.05); }
+        .dark .col-today input:focus:not(:read-only) { background-color: rgba(255, 237, 0, 0.15); }
+        .dark .ferie-cell { background-color: #252627; color: #94a3b8; }
+        .dark input[type="text"].societe-input:hover,
+        .dark input[type="text"].societe-input:focus {
+            border-bottom-color: #64748b;
+        }
+        .dark .signature-box .box { border-color: #94a3b8; }
+        .dark input, .dark select { color: #f1f5f9; }
+        .dark select option { background-color: #1e1f20; color: #f1f5f9; }
+
+        @media print {
+            body { background: white; padding: 0; display: block; }
+            .page-wrapper { overflow: visible; max-width: none; padding: 0; }
+            .a4-page { box-shadow: none; width: 100%; padding: 10mm 5mm; margin: 0; }
+            .no-print { display: none !important; }
+            .col-today { background-color: transparent !important; }
+        }
+
+        /* Top Header Info */
+        .top-info {
+            display: flex;
+            gap: 40px;
+            margin-bottom: 15px;
+            font-size: 20px;
+            align-items: center;
+        }
+        .top-info .input-group { display: flex; align-items: baseline; flex: 1; }
+        .top-info span { font-size: 20px; font-weight: normal; white-space: nowrap; }
+        .top-info input[type="text"] {
+            border: none;
+            border-bottom: 1px solid transparent;
+            font-size: 20px;
+            font-weight: bold;
+            outline: none;
+            margin-left: 10px;
+            flex: 1;
+            font-family: inherit;
+            text-align: left;
+            background: transparent;
+            height: auto;
+        }
+        .top-info input[type="text"]:hover, .top-info input[type="text"]:focus {
+            border-bottom: 1px dashed #ccc;
+        }
+
+        /* Main Bounding Box */
+        .main-frame { border: 3px solid black; padding: 3px; margin-bottom: 20px; transition: border-color 0.2s;}
+        .inner-frame { border: 1px solid black; transition: border-color 0.2s;}
+        .title-section { text-align: center; padding: 15px 0 10px 0; border-bottom: 1px solid black; transition: border-color 0.2s;}
+        .title-section h1 {
+            font-family: "Times New Roman", Times, serif;
+            font-size: 38px;
+            margin: 0 0 5px 0;
+            letter-spacing: 1px;
+            font-weight: normal;
+        }
+        .title-section h2 { font-size: 14px; margin: 0; font-weight: bold; }
+
+        /* Table Styles */
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        th, td {
+            border: 1px solid black;
+            text-align: center;
+            vertical-align: middle;
+            font-size: 12px;
+            padding: 0;
+            height: 22px;
+            transition: border-color 0.2s;
+        }
+        th { font-weight: normal; }
+        .header-cell { padding: 2px; }
+
+        .col-act { width: 8%; }
+        .col-dos { width: 10.5%; }
+        .col-lig { width: 8.5%; }
+        .col-tr { width: 11%; }
+        .col-day { width: 10.333%; }
+
+        input[type="text"], input[type="number"], select.text-motif, select.select-motif {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: transparent;
+            text-align: center;
+            font-size: 12px;
+            box-sizing: border-box;
+            outline: none;
+            font-family: inherit;
+        }
+        select.select-motif {
+            text-align-last: center;
+            appearance: none;
+            -webkit-appearance: none;
+            padding-right: 2px;
+        }
+        input[type="text"]:focus:not(:read-only), 
+        input[type="number"]:focus:not(:read-only) { background: #f0f8ff; }
+        input[type="text"]:read-only { cursor: default; }
+
+        .text-left { text-align: left; padding-left: 5px; }
+        .font-bold { font-weight: bold; }
+        .text-motif { text-align: left !important; padding-left: 5px !important; }
+
+        .semaine-header { text-align: center; border-bottom: 1px solid black; padding: 2px 0; transition: border-color 0.2s; }
+        .semaine-header input { display: inline-block; border-bottom: none; font-weight: bold; background: transparent;}
+
+        .ferie-cell { font-weight: bold; font-size: 12px; letter-spacing: 1px; background-color: #f9fafb; transition: background-color 0.2s, color 0.2s;}
+        .bg-gray-input { background-color: #f3f4f6 !important; transition: background-color 0.2s;}
+        
+        .col-today { background-color: #e0f2fe; transition: background-color 0.2s;}
+        .col-today input { background-color: transparent; }
+        .col-today input:focus:not(:read-only) { background-color: #bae6fd; }
+
+        .totals-row td { height: 24px; }
+
+        /* Footer */
+        .footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 10px; }
+        input[type="text"].societe-input {
+            font-family: "Times New Roman", Times, serif;
+            font-size: 38px;
+            font-weight: normal;
+            letter-spacing: 1px;
+            border: none;
+            background: transparent;
+            outline: none;
+            width: 250px;
+            height: auto;
+            border-bottom: 1px dashed transparent;
+            text-align: left;
+        }
+        input[type="text"].societe-input:hover, input[type="text"].societe-input:focus {
+            border-bottom: 1px dashed #ccc;
+        }
+        .signature-box { display: flex; flex-direction: column; align-items: center; }
+        .signature-box span { font-size: 11px; margin-bottom: 2px; }
+        .signature-box .box { border: 1px solid black; width: 160px; height: 60px; transition: border-color 0.2s;}
+        .important-note { margin-top: 25px; font-size: 9px; font-weight: bold; }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-charte-bg-sombre text-slate-900 dark:text-slate-100 min-h-screen p-4 md:p-8 transition-colors duration-200">
+
+    <div id="app" class="max-w-6xl mx-auto space-y-6">
+        
+        <!-- EN-TÊTE PRINCIPAL & THÈME -->
+        <div class="no-print flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <h1 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-3">
+                <svg class="text-black dark:text-white w-8 h-8" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/></svg>
+                Feuille de Pointage
+            </h1>
+            
+            <!-- Sélecteur de Thème -->
+            <div class="flex items-center bg-white dark:bg-charte-tuile-sombre rounded-sm p-1 shadow-sm border border-slate-200 dark:border-slate-700/50">
+                <button id="btn-theme-light" onclick="setTheme('light')" class="p-2 rounded-sm transition-colors text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white" title="Mode Clair">
+                    <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+                </button>
+                <button id="btn-theme-dark" onclick="setTheme('dark')" class="p-2 rounded-sm transition-colors text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white" title="Mode Sombre">
+                    <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+                </button>
+                <button id="btn-theme-auto" onclick="setTheme('auto')" class="p-2 rounded-sm transition-colors text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white" title="Système (Auto)">
+                    <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- BARRE D'OUTILS -->
+        <div class="no-print bg-white dark:bg-charte-tuile-sombre p-4 rounded-sm shadow-sm border border-slate-200 dark:border-slate-700/50 flex flex-wrap justify-between items-center gap-4 transition-colors duration-200">
+            <!-- Navigation -->
+            <div class="flex items-center gap-2">
+                <button onclick="changeWeek(-1)" class="flex items-center gap-1 px-3 py-2 rounded-sm text-sm font-medium transition-colors border bg-white dark:bg-charte-tuile-sombre text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-[#252627]" title="Semaine précédente">
+                    <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    Précédente
+                </button>
+                <button onclick="changeWeek(0)" class="flex items-center gap-1 px-3 py-2 rounded-sm text-sm font-medium transition-colors border bg-white dark:bg-charte-tuile-sombre text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-[#252627]">
+                    <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    Aujourd'hui
+                </button>
+                <button onclick="changeWeek(1)" class="flex items-center gap-1 px-3 py-2 rounded-sm text-sm font-medium transition-colors border bg-white dark:bg-charte-tuile-sombre text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-[#252627]" title="Semaine suivante">
+                    Suivante
+                    <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex items-center gap-3 flex-wrap">
+                <span id="save-status" class="text-sm text-green-600 dark:text-green-400 font-bold opacity-0 transition-opacity duration-300 min-w-[100px] text-right">✅ Sauvegardé</span>
+                
+                <button onclick="openBilanModal()" class="flex items-center gap-2 text-sm font-bold text-white bg-blue-600 px-4 py-2 rounded-sm hover:bg-blue-700 transition-colors shadow-sm dark:bg-blue-700 dark:hover:bg-blue-600">
+                    <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M9 16h6"/></svg>
+                    Bilan Mensuel
+                </button>
+
+                <button onclick="exportPDF()" class="flex items-center gap-2 text-sm font-bold text-slate-900 bg-charte-jaune px-4 py-2 rounded-sm hover:bg-charte-jaune-hover transition-colors shadow-sm">
+                    <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                    Exporter PDF
+                </button>
+
+                <button onclick="clearHistory(this)" class="flex items-center gap-2 text-sm font-medium text-white bg-red-600 px-4 py-2 rounded-sm hover:bg-red-700 transition-colors shadow-sm">
+                    <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                    Purger
+                </button>
+            </div>
+        </div>
+
+        <!-- ZONE D'EDITION (A4) -->
+        <div class="page-wrapper">
+            <div class="a4-page">
+                <div class="top-info">
+                    <div class="input-group">
+                        <span>NOM :</span>
+                        <input type="text" id="profil-nom" value="Nom">
+                    </div>
+                    <div class="input-group">
+                        <span>Prénom :</span>
+                        <input type="text" id="profil-prenom" value="Prénom">
+                    </div>
+                </div>
+
+                <div class="main-frame">
+                    <div class="inner-frame">
+                        <div class="title-section">
+                            <h1>FEUILLE DE POINTAGE</h1>
+                            <h2>ATTENTION : - Toujours noter les N° de dossier complets ainsi que les n° de ligne devis</h2>
+                        </div>
+
+                        <table id="pointage-table">
+                            <colgroup>
+                                <col class="col-act">
+                                <col class="col-dos">
+                                <col class="col-lig">
+                                <col class="col-tr">
+                                <col class="col-day">
+                                <col class="col-day">
+                                <col class="col-day">
+                                <col class="col-day">
+                                <col class="col-day">
+                                <col class="col-day">
+                            </colgroup>
+                            <thead>
+                                <tr>
+                                    <th rowspan="2" class="header-cell">Activité</th>
+                                    <th rowspan="2" class="header-cell">N° dossier</th>
+                                    <th rowspan="2" class="header-cell">N° de<br>ligne<br>devis<br><br>3 chiffres</th>
+                                    <th rowspan="2" class="header-cell">Heure de<br>transport (T)<br>ou heure de<br>nuit (N)</th>
+                                    <th colspan="6" class="semaine-header">
+                                        SEMAINE N° <input type="text" id="header-week" style="width: 30px; font-weight: normal;" readonly>
+                                        du <input type="text" id="header-du" style="width: 75px; font-weight: normal;" readonly>
+                                        au <input type="text" id="header-au" style="width: 75px; font-weight: normal;" readonly>
+                                    </th>
+                                </tr>
+                                <tr>
+                                    <th class="header-cell th-day d-0">LUNDI</th>
+                                    <th class="header-cell th-day d-1">MARDI</th>
+                                    <th class="header-cell th-day d-2">MERCREDI</th>
+                                    <th class="header-cell th-day d-3">JEUDI</th>
+                                    <th class="header-cell th-day d-4">VENDREDI</th>
+                                    <th class="header-cell th-day d-5">SAMEDI</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cao-rows">
+                                <!-- Injections JS -->
+                            </tbody>
+                            <tbody id="absence-rows">
+                                <!-- Injections JS -->
+                            </tbody>
+                            <tfoot id="totals-foot">
+                                <tr class="totals-row">
+                                    <td colspan="4" class="text-left font-bold">Total heures par jour</td>
+                                    <td id="tot-0" class="font-bold td-day d-0"></td>
+                                    <td id="tot-1" class="font-bold td-day d-1"></td>
+                                    <td id="tot-2" class="font-bold td-day d-2"></td>
+                                    <td id="tot-3" class="font-bold td-day d-3"></td>
+                                    <td id="tot-4" class="font-bold td-day d-4"></td>
+                                    <td id="tot-5" class="font-bold td-day d-5"></td>
+                                </tr>
+                                <tr class="totals-row ref-row">
+                                    <td colspan="4" class="text-left">Horaire hebdomadaire de référence</td>
+                                    <td id="ref-0" class="td-day d-0">8H</td>
+                                    <td id="ref-1" class="td-day d-1">8H</td>
+                                    <td id="ref-2" class="td-day d-2">8H</td>
+                                    <td id="ref-3" class="td-day d-3">8H</td>
+                                    <td id="ref-4" class="td-day d-4">4H</td>
+                                    <td id="ref-5" class="td-day d-5"></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="footer">
+                    <input type="text" id="profil-societe" class="societe-input" value="ITEC Etudes">
+                    <div class="signature-box">
+                        <span style="text-decoration: underline;">Signature Salarié</span>
+                        <div class="box"></div>
+                    </div>
+                    <div class="signature-box">
+                        <span style="text-decoration: underline;">Signature Responsable hiérarchique</span>
+                        <div class="box"></div>
+                    </div>
+                </div>
+
+                <div class="important-note text-slate-800 dark:text-slate-400">
+                    Important : OBLIGATION de préciser le motif en cas d'absence(s) quelconque(s) : RTT, Congés Payés, Maladie, Fériés, Autres ....
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL BILAN MENSUEL (no-print) -->
+    <div id="bilan-modal" class="no-print fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex justify-center items-center p-4 transition-opacity">
+        <div class="bg-white dark:bg-charte-tuile-sombre rounded-sm shadow-xl w-full max-w-3xl overflow-hidden border border-slate-200 dark:border-slate-700/50">
+            <div class="p-4 border-b border-slate-200 dark:border-slate-700/50 flex justify-between items-center bg-slate-50 dark:bg-[#18191a]">
+                <h2 class="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                    <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M9 16h6"/></svg>
+                    Bilan Mensuel
+                </h2>
+                <button onclick="closeBilanModal()" class="text-slate-500 hover:text-red-500 transition-colors bg-slate-200/50 dark:bg-slate-700/50 rounded-full p-1">
+                    <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+            </div>
+            
+            <div class="p-6 space-y-6">
+                <!-- Filtres -->
+                <div class="flex gap-4 items-center">
+                    <label class="text-sm font-semibold text-slate-600 dark:text-slate-300">Période :</label>
+                    <select id="bilan-month" onchange="calculateBilan()" class="bg-slate-50 dark:bg-[#252627] border border-slate-300 dark:border-slate-600 rounded p-2 text-slate-800 dark:text-white flex-1 font-medium outline-none focus:border-blue-500 max-w-[200px]">
+                        <option value="0">Janvier</option><option value="1">Février</option>
+                        <option value="2">Mars</option><option value="3">Avril</option>
+                        <option value="4">Mai</option><option value="5">Juin</option>
+                        <option value="6">Juillet</option><option value="7">Août</option>
+                        <option value="8">Septembre</option><option value="9">Octobre</option>
+                        <option value="10">Novembre</option><option value="11">Décembre</option>
+                    </select>
+                    <select id="bilan-year" onchange="calculateBilan()" class="bg-slate-50 dark:bg-[#252627] border border-slate-300 dark:border-slate-600 rounded p-2 text-slate-800 dark:text-white w-32 font-medium outline-none focus:border-blue-500">
+                        <!-- Rempli par JS -->
+                    </select>
+                </div>
+
+                <!-- Grille de résultats Détaillée -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- 1. Total Réalisé -->
+                    <div class="bg-slate-50 border border-slate-200 dark:border-slate-600 dark:bg-[#252627] p-4 rounded-sm text-center flex flex-col justify-center">
+                        <div class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Total Assimilé (Mois)</div>
+                        <div class="text-3xl font-black text-slate-800 dark:text-white" id="bilan-effect">0H</div>
+                        <div class="text-xs text-slate-400 mt-1">Somme des semaines du mois</div>
+                    </div>
+                    <!-- 2. Heures Sup -->
+                    <div class="bg-green-50 border border-green-200 dark:border-green-900/50 dark:bg-green-900/10 p-4 rounded-sm text-center flex flex-col justify-center shadow-inner">
+                        <div class="text-xs font-semibold uppercase tracking-wide text-green-600 dark:text-green-400 mb-1">Solde Heures Sup (Mois)</div>
+                        <div class="text-3xl font-black text-green-700 dark:text-green-300" id="bilan-solde">0H</div>
+                        <div class="text-xs text-green-600/80 mt-1 font-medium">Cumul des soldes hebdomadaires</div>
+                    </div>
+                </div>
+
+                <!-- Détail par semaine -->
+                <div class="mt-2">
+                    <h3 class="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 border-b border-slate-200 dark:border-slate-700 pb-2">Détail par semaine (débutant dans le mois)</h3>
+                    <div id="bilan-weeks-list" class="space-y-2 max-h-48 overflow-y-auto pr-2">
+                        <!-- Injected by JS -->
+                    </div>
+                </div>
+
+                <!-- Info bulle -->
+                <div class="mt-4 p-3 bg-slate-100 dark:bg-slate-800/50 rounded border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-400 flex gap-3 items-start">
+                    <svg class="w-5 h-5 text-blue-500 mt-0.5 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><info x="12" y="16" width="0.01" height="0.01"/><path d="M12 8v4"/></svg>
+                    <div>
+                        <span class="font-semibold text-slate-700 dark:text-slate-300">Formule de calcul :</span> 
+                        Les heures supplémentaires sont désormais calculées <strong>semaine par semaine</strong>. Pour chaque semaine, on compare le total assimilé à la base de <strong>36h</strong> (qui inclut déjà l'heure de RTT). La somme de ces écarts hebdomadaires constitue votre solde mensuel net.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Gestion du Thème (Clair / Sombre / Auto) ---
+        let currentTheme = localStorage.getItem('theme') || 'auto';
+        
+        function applyTheme(theme) {
+            if (theme === 'dark') {
+                document.documentElement.classList.add('dark');
+            } else if (theme === 'light') {
+                document.documentElement.classList.remove('dark');
+            } else {
+                if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
+            }
+            updateThemeUI(theme);
+        }
+
+        function setTheme(theme) {
+            currentTheme = theme;
+            localStorage.setItem('theme', theme);
+            applyTheme(theme);
+        }
+
+        function updateThemeUI(theme) {
+            const btnLight = document.getElementById('btn-theme-light');
+            const btnDark = document.getElementById('btn-theme-dark');
+            const btnAuto = document.getElementById('btn-theme-auto');
+
+            const activeClasses = ['bg-slate-100', 'dark:bg-charte-bg-sombre', 'text-blue-600', 'dark:text-charte-jaune'];
+            const inactiveClasses = ['text-slate-500', 'dark:text-slate-400', 'hover:text-slate-900', 'dark:hover:text-white'];
+
+            [btnLight, btnDark, btnAuto].forEach(btn => {
+                if(!btn) return;
+                btn.classList.remove(...activeClasses);
+                btn.classList.add(...inactiveClasses);
+            });
+
+            let activeBtn = theme === 'light' ? btnLight : theme === 'dark' ? btnDark : btnAuto;
+            if(activeBtn) {
+                activeBtn.classList.remove(...inactiveClasses);
+                activeBtn.classList.add(...activeClasses);
+            }
+        }
+
+        // --- Logique Métier Feuille de Pointage ---
+        const CAO_ROWS_COUNT = 22;
+        const ABS_ROWS_COUNT = 3;
+        const STATE_KEY = 'pointage_history';
+        const PROFILE_KEY = 'pointage_profile';
+        const REF_HOURS = ['8H', '8H', '8H', '8H', '4H', ''];
+        
+        let currentMonday = null;
+        let currentJoursFerie = [];
+        let autoSaveTimer = null; 
+        
+        function getISOWeek(d) {
+            const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+            const dayNum = date.getUTCDay() || 7;
+            date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+            const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+            return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+        }
+
+        function getMonday(d) {
+            const date = new Date(d);
+            const day = date.getDay() || 7;
+            if (day !== 1) date.setDate(date.getDate() - (day - 1));
+            date.setHours(0,0,0,0);
+            return date;
+        }
+
+        function formatDateFr(date) {
+            return String(date.getDate()).padStart(2, '0') + '/' + 
+                   String(date.getMonth() + 1).padStart(2, '0') + '/' + 
+                   date.getFullYear();
+        }
+
+        function formatDateISO(date) {
+            return date.getFullYear() + '-' + 
+                   String(date.getMonth() + 1).padStart(2, '0') + '-' + 
+                   String(date.getDate()).padStart(2, '0');
+        }
+
+        function getEaster(year) {
+            const f = Math.floor, G = year % 19, C = f(year / 100),
+                H = (C - f(C / 4) - f((8 * C + 13) / 25) + 19 * G + 15) % 30,
+                I = H - f(H / 28) * (1 - f(29 / (H + 1)) * f((21 - G) / 11)),
+                J = (year + f(year / 4) + I + 2 - C + f(C / 4)) % 7,
+                L = I - J, month = 3 + f((L + 40) / 44),
+                day = L + 28 - 31 * f(month / 4);
+            return new Date(year, month - 1, day);
+        }
+
+        function getHolidaysFrance(year) {
+            const easter = getEaster(year);
+            const easterMonday = new Date(easter); easterMonday.setDate(easter.getDate() + 1);
+            const ascension = new Date(easter); ascension.setDate(easter.getDate() + 39);
+            const pentecostMonday = new Date(easter); pentecostMonday.setDate(easter.getDate() + 50);
+
+            const holidays = [
+                new Date(year, 0, 1), new Date(year, 4, 1), new Date(year, 4, 8),
+                new Date(year, 6, 14), new Date(year, 7, 15), new Date(year, 10, 1),
+                new Date(year, 10, 11), new Date(year, 11, 25),
+                easterMonday, ascension, pentecostMonday
+            ];
+            return holidays.map(d => formatDateISO(d));
+        }
+
+        function getWeekKey(monday) {
+            return monday.getFullYear() + '-W' + String(getISOWeek(monday)).padStart(2, '0');
+        }
+
+        function loadProfile() {
+            const profileStr = localStorage.getItem(PROFILE_KEY);
+            if (profileStr) {
+                try {
+                    const profile = JSON.parse(profileStr);
+                    document.getElementById('profil-nom').value = profile.nom || '';
+                    document.getElementById('profil-prenom').value = profile.prenom || '';
+                    document.getElementById('profil-societe').value = profile.societe || 'Société';
+                } catch (e) {}
+            }
+        }
+
+        function saveProfile() {
+            const profile = {
+                nom: document.getElementById('profil-nom').value,
+                prenom: document.getElementById('profil-prenom').value,
+                societe: document.getElementById('profil-societe').value
+            };
+            localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+            showSaveIndicator();
+        }
+
+        function getHistory() {
+            return JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
+        }
+
+        function hasData(data) {
+            if (!data) return false;
+            for (let r of data.cao) {
+                if (r.dos || r.lig || r.tr || r.days.some(x => x)) return true;
+            }
+            if (data.absence.m1 || data.absence.m2) return true;
+            for (let r of data.absence.rows) if (r.some(x => x)) return true;
+            
+            if (currentJoursFerie && currentJoursFerie.length > 0) {
+                for (let d = 0; d < 6; d++) {
+                    if (currentJoursFerie[d] && data.absence.rows[0][d] !== 'FERIE') return true;
+                }
+            }
+            return false;
+        }
+
+        function triggerAutoSave() {
+            clearTimeout(autoSaveTimer);
+            autoSaveTimer = setTimeout(() => {
+                saveCurrentWeek();
+            }, 800);
+        }
+
+        function showSaveIndicator() {
+            const indicator = document.getElementById('save-status');
+            indicator.style.opacity = "1";
+            setTimeout(() => { indicator.style.opacity = "0"; }, 2000);
+        }
+
+        function saveCurrentWeek() {
+            if (!currentMonday) return;
+            
+            const data = {
+                week: document.getElementById('header-week').value,
+                du: document.getElementById('header-du').value,
+                au: document.getElementById('header-au').value,
+                cao: [],
+                absence: {
+                    m1: document.querySelector('.m-abs-1') ? document.querySelector('.m-abs-1').value : '',
+                    m2: document.querySelector('.m-abs-2') ? document.querySelector('.m-abs-2').value : '',
+                    rows: []
+                }
+            };
+
+            for (let i = 0; i < CAO_ROWS_COUNT; i++) {
+                const rowObj = { dos: '', lig: '', tr: '', days: ['', '', '', '', '', ''] };
+                const dosInput = document.querySelector(`.i-dos[data-row="${i}"]`);
+                if (dosInput) {
+                    rowObj.dos = dosInput.value;
+                    rowObj.lig = document.querySelector(`.i-lig[data-row="${i}"]`).value;
+                    rowObj.tr = document.querySelector(`.i-tr[data-row="${i}"]`).value;
+                    for (let d = 0; d < 6; d++) {
+                        const cellInput = document.querySelector(`.day-input.cao-input.d-${d}[data-row="${i}"]`);
+                        if (cellInput) rowObj.days[d] = cellInput.value;
+                    }
+                }
+                data.cao.push(rowObj);
+            }
+
+            for (let i = 0; i < ABS_ROWS_COUNT; i++) {
+                const rowArr = ['', '', '', '', '', ''];
+                for (let d = 0; d < 6; d++) {
+                    const absInput = document.querySelector(`.db-abs.d-${d}[data-row="${i}"]`);
+                    if (absInput) rowArr[d] = absInput.value;
+                }
+                data.absence.rows.push(rowArr);
+            }
+
+            const history = getHistory();
+            const key = getWeekKey(currentMonday);
+
+            if (hasData(data)) {
+                history[key] = data;
+                localStorage.setItem(STATE_KEY, JSON.stringify(history));
+                showSaveIndicator();
+            } else if (history[key]) {
+                delete history[key];
+                localStorage.setItem(STATE_KEY, JSON.stringify(history));
+                showSaveIndicator();
+            }
+        }
+
+        function changeWeek(offset) {
+            if (currentMonday) saveCurrentWeek();
+            
+            let newDate;
+            if (offset === 0) {
+                newDate = getMonday(new Date());
+            } else {
+                newDate = new Date(currentMonday);
+                newDate.setDate(newDate.getDate() + offset * 7);
+            }
+            loadWeek(newDate);
+        }
+
+        let confirmPurge = false;
+        function clearHistory(btn) {
+            if (!confirmPurge) {
+                const initialHtml = btn.innerHTML;
+                btn.innerHTML = `Êtes-vous sûr ?`;
+                confirmPurge = true;
+                setTimeout(() => { confirmPurge = false; btn.innerHTML = initialHtml; }, 3000);
+                return;
+            }
+            localStorage.removeItem(STATE_KEY);
+            clearUIInputs();
+            confirmPurge = false;
+            btn.innerHTML = `✅ Purgé !`;
+            setTimeout(() => { 
+                btn.innerHTML = `<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg> Purger`;
+            }, 2000);
+            loadWeek(getMonday(new Date()));
+        }
+
+        function clearUIInputs() {
+            document.querySelectorAll('input.i-dos, input.i-lig, input.i-tr, input.day-input, input.text-motif').forEach(inp => inp.value = '');
+            calculateTotals();
+        }
+
+        function highlightToday() {
+            const today = new Date();
+            document.querySelectorAll('.col-today').forEach(el => el.classList.remove('col-today'));
+
+            if (!currentMonday || getWeekKey(today) !== getWeekKey(currentMonday)) return;
+
+            let dayIndex = today.getDay() - 1; 
+            if (dayIndex >= 0 && dayIndex <= 5) {
+                document.querySelectorAll(`.d-${dayIndex}`).forEach(el => el.classList.add('col-today'));
+                document.querySelectorAll(`.day-input.d-${dayIndex}`).forEach(el => el.parentElement.classList.add('col-today'));
+            }
+        }
+
+        function loadWeek(monday) {
+            currentMonday = new Date(monday);
+            let saturday = new Date(monday);
+            saturday.setDate(saturday.getDate() + 5);
+
+            document.getElementById('header-week').value = getISOWeek(monday);
+            document.getElementById('header-du').value = formatDateFr(monday);
+            document.getElementById('header-au').value = formatDateFr(saturday);
+
+            const allHolidays = [...getHolidaysFrance(monday.getFullYear()), ...getHolidaysFrance(saturday.getFullYear())];
+            currentJoursFerie = Array.from({length: 6}, (_, d) => {
+                let tmp = new Date(monday); tmp.setDate(tmp.getDate() + d);
+                return allHolidays.includes(formatDateISO(tmp));
+            });
+
+            const key = getWeekKey(monday);
+            const history = getHistory();
+            let absenceStatus = ['', '', '', '', '', ''];
+            
+            if (history[key]?.absence?.rows?.[0]) {
+                absenceStatus = history[key].absence.rows[0];
+            } else if (!history[key]) {
+                for (let d = 0; d < 6; d++) if (currentJoursFerie[d]) absenceStatus[d] = 'FERIE';
+            }
+
+            renderTable(absenceStatus);
+
+            if (history[key]) {
+                const data = history[key];
+                for (let i = 0; i < CAO_ROWS_COUNT; i++) {
+                    const rowData = data.cao[i] || {};
+                    const dosInput = document.querySelector(`.i-dos[data-row="${i}"]`);
+                    if (dosInput) {
+                        dosInput.value = rowData.dos || '';
+                        document.querySelector(`.i-lig[data-row="${i}"]`).value = rowData.lig || '';
+                        document.querySelector(`.i-tr[data-row="${i}"]`).value = rowData.tr || '';
+                        for(let d=0; d<6; d++) {
+                            const cellInput = document.querySelector(`.day-input.cao-input.d-${d}[data-row="${i}"]`);
+                            if (cellInput && rowData.days?.[d]) cellInput.value = rowData.days[d];
+                        }
+                    }
+                }
+                if (document.querySelector('.m-abs-1')) document.querySelector('.m-abs-1').value = data.absence?.m1 || '';
+                if (document.querySelector('.m-abs-2')) document.querySelector('.m-abs-2').value = data.absence?.m2 || '';
+                for (let i = 0; i < ABS_ROWS_COUNT; i++) {
+                    for(let d=0; d<6; d++) {
+                        const absInput = document.querySelector(`.db-abs.d-${d}[data-row="${i}"]`);
+                        if (absInput && data.absence?.rows?.[i]) absInput.value = data.absence.rows[i][d] || '';
+                    }
+                }
+            } else {
+                for (let d = 0; d < 6; d++) {
+                    const absInput = document.querySelector(`.db-abs.d-${d}[data-row="0"]`);
+                    if (absInput) absInput.value = absenceStatus[d];
+                }
+            }
+            
+            calculateTotals();
+            highlightToday();
+        }
+
+        function renderTable(absenceStatus = ['', '', '', '', '', '']) {
+            const cbody = document.getElementById('cao-rows');
+            let htmlCao = '';
+            for (let i = 0; i < CAO_ROWS_COUNT; i++) {
+                htmlCao += `<tr><td>CAO</td>`;
+                htmlCao += `<td><input type="text" class="i-dos" data-row="${i}"></td>`; // maxlength retiré ici
+                htmlCao += `<td><input type="text" class="i-lig" data-row="${i}" maxlength="3"></td>`;
+                htmlCao += `<td><input type="text" class="i-tr" data-row="${i}" maxlength="1"></td>`;
+                for(let d = 0; d < 6; d++) {
+                    if (absenceStatus[d]) {
+                        if (i === 0) htmlCao += `<td rowspan="${CAO_ROWS_COUNT}" class="ferie-cell bg-gray-input d-${d}">${absenceStatus[d].toUpperCase()}</td>`;
+                    } else {
+                        htmlCao += `<td><input type="text" class="day-input cao-input d-${d}" data-day="${d}" data-row="${i}" title="Heures" placeholder=""></td>`;
+                    }
+                }
+                htmlCao += `</tr>`;
+            }
+            cbody.innerHTML = htmlCao;
+
+            const abody = document.getElementById('absence-rows');
+            let htmlAbs = '';
+            for (let i = 0; i < ABS_ROWS_COUNT; i++) {
+                htmlAbs += `<tr>`;
+                if (i === 0) {
+                    htmlAbs += `<td>Absence</td><td colspan="3" class="text-left font-bold" style="padding-left: 5px;">Motif de l'absence</td>`;
+                } else {
+                    htmlAbs += `<td></td><td colspan="3"><input type="text" class="text-motif m-abs-${i}"></td>`;
+                }
+                for(let d = 0; d < 6; d++) {
+                    if (i === 0) {
+                        htmlAbs += `<td class="d-${d}">
+                            <select class="day-input db-abs d-${d} select-motif" data-day="${d}" data-row="${i}">
+                                <option value=""></option><option value="CP">CP</option><option value="RTT">RTT</option>
+                                <option value="ARRET">ARRET</option><option value="SANS SOLDE">SANS SOLDE</option>
+                                <option value="ENFANT MALADE">ENFANT MALADE</option><option value="FERIE">FERIÉ</option>
+                            </select>
+                        </td>`;
+                    } else if (absenceStatus[d]) {
+                        htmlAbs += `<td class="bg-gray-input d-${d}"></td>`;
+                    } else {
+                        htmlAbs += `<td class="d-${d}"><input type="text" class="day-input db-abs d-${d}" data-day="${d}" data-row="${i}"></td>`;
+                    }
+                }
+                htmlAbs += `</tr>`;
+            }
+            abody.innerHTML = htmlAbs;
+
+            for(let d = 0; d < 6; d++) {
+                const isAbsence = !!absenceStatus[d];
+                const totCell = document.getElementById(`tot-${d}`);
+                const refCell = document.getElementById(`ref-${d}`);
+                if (isAbsence) {
+                    totCell.classList.add('bg-gray-input'); refCell.classList.add('bg-gray-input'); refCell.textContent = '';
+                } else {
+                    totCell.classList.remove('bg-gray-input'); refCell.classList.remove('bg-gray-input'); refCell.textContent = REF_HOURS[d];
+                }
+            }
+        }
+
+        function cleanHourInput(val) {
+            let cleaned = val.replace(/[^0-9.,]/g, '').replace(',', '.');
+            if(parseFloat(cleaned) > 24) return "24";
+            return cleaned;
+        }
+
+        function calculateTotals() {
+            for (let day = 0; day < 6; day++) {
+                let sum = 0;
+                document.querySelectorAll(`.day-input.d-${day}`).forEach(input => {
+                    if(input.tagName === 'INPUT') {
+                        let val = input.value.trim();
+                        if(val) {
+                            let cleanVal = cleanHourInput(val);
+                            if(val !== cleanVal && !val.endsWith('.') && !val.endsWith(',')) {
+                                input.value = cleanVal; 
+                            }
+                            let num = parseFloat(cleanVal);
+                            if (!isNaN(num)) sum += num;
+                        }
+                    }
+                });
+                
+                const td = document.getElementById(`tot-${day}`);
+                if (!td.classList.contains('bg-gray-input')) {
+                    if (sum > 0) {
+                        td.textContent = (sum % 1 !== 0 ? sum.toFixed(2).replace('.', ',') : sum) + 'H';
+                    } else {
+                        td.textContent = '';
+                    }
+                }
+            }
+        }
+
+        // --- NOUVELLE FONCTIONNALITE : Bilan Mensuel ---
+        function initBilanModal() {
+            const yearSelect = document.getElementById('bilan-year');
+            const currentYear = new Date().getFullYear();
+            
+            // Populer les années (année dernière, en cours, prochaine)
+            yearSelect.innerHTML = '';
+            for(let y = currentYear - 2; y <= currentYear + 2; y++) {
+                let opt = document.createElement('option');
+                opt.value = y;
+                opt.textContent = y;
+                if(y === currentYear) opt.selected = true;
+                yearSelect.appendChild(opt);
+            }
+            
+            // Pré-sélectionner le mois en cours
+            document.getElementById('bilan-month').value = new Date().getMonth();
+        }
+
+        function openBilanModal() {
+            document.getElementById('bilan-modal').classList.remove('hidden');
+            calculateBilan(); // Calculer pour le mois par défaut
+        }
+
+        function closeBilanModal() {
+            document.getElementById('bilan-modal').classList.add('hidden');
+        }
+
+        function formatHeuresText(h) {
+            if (h === 0) return "0H";
+            let isNeg = h < 0;
+            let absH = Math.abs(h);
+            let str = (absH % 1 !== 0) ? absH.toFixed(2).replace('.', ',') : absH;
+            return (isNeg ? "-" : "+") + str + "H";
+        }
+        
+        function formatHeuresSimple(h) {
+            if (h === 0) return "0H";
+            let isNeg = h < 0;
+            let absH = Math.abs(h);
+            let str = (absH % 1 !== 0) ? absH.toFixed(2).replace('.', ',') : absH;
+            return (isNeg ? "-" : "") + str + "H";
+        }
+
+        function calculateBilan() {
+            const month = parseInt(document.getElementById('bilan-month').value);
+            const year = parseInt(document.getElementById('bilan-year').value);
+            
+            let totalAssimileMois = 0;
+            let totalSoldeMois = 0;
+            
+            const weeksDetails = [];
+
+            // Parcourir l'historique pour trouver les semaines du mois
+            const history = getHistory();
+            for (const [weekKey, data] of Object.entries(history)) {
+                // Parse la date du lundi de cette semaine
+                const partsDu = data.du.split('/');
+                const mondayDate = new Date(partsDu[2], partsDu[1]-1, partsDu[0]);
+                
+                // Si la semaine commence dans le mois sélectionné
+                if (mondayDate.getMonth() === month && mondayDate.getFullYear() === year) {
+                    
+                    let weekTravail = 0;
+                    let weekAbsence = 0;
+                    
+                    for (let i=0; i<6; i++) {
+                        // Heures travaillées
+                        let dayWork = 0;
+                        data.cao.forEach(row => {
+                            let val = row.days[i];
+                            if (val) {
+                                let num = parseFloat(val.replace(',', '.'));
+                                if (!isNaN(num)) dayWork += num;
+                            }
+                        });
+                        weekTravail += dayWork;
+
+                        // Vérifier s'il y a une absence justifiée (CP, RTT, FERIE, etc.)
+                        let isAbsence = false;
+                        if(data.absence && data.absence.rows && data.absence.rows[0]) {
+                            if (data.absence.rows[0][i]) isAbsence = true;
+                        }
+                        
+                        // Heures théoriques pour ce jour spécifique (pour valoriser l'absence)
+                        let theoDay = (i >= 0 && i <= 3) ? 8 : (i === 4 ? 4 : 0);
+                        
+                        if (isAbsence) {
+                            let absH = Math.max(0, theoDay - dayWork);
+                            weekAbsence += absH;
+                        }
+                    }
+
+                    const weekTotal = weekTravail + weekAbsence;
+                    const weekSolde = weekTotal - 36; // Solde par rapport à la base de 36h
+
+                    totalAssimileMois += weekTotal;
+                    totalSoldeMois += weekSolde;
+
+                    weeksDetails.push({
+                        weekNum: data.week,
+                        du: data.du,
+                        au: data.au,
+                        total: weekTotal,
+                        solde: weekSolde
+                    });
+                }
+            }
+
+            // Mise à jour de l'UI
+            document.getElementById('bilan-effect').textContent = formatHeuresSimple(totalAssimileMois);
+            
+            const soldeEl = document.getElementById('bilan-solde');
+            soldeEl.textContent = formatHeuresText(totalSoldeMois);
+            
+            if (totalSoldeMois > 0) {
+                soldeEl.className = "text-3xl font-black text-green-600 dark:text-green-400";
+            } else if (totalSoldeMois < 0) {
+                soldeEl.className = "text-3xl font-black text-red-600 dark:text-red-400";
+            } else {
+                soldeEl.className = "text-3xl font-black text-slate-800 dark:text-white";
+            }
+
+            // Générer la liste détaillée des semaines
+            weeksDetails.sort((a, b) => parseInt(a.weekNum) - parseInt(b.weekNum));
+            const listEl = document.getElementById('bilan-weeks-list');
+            listEl.innerHTML = '';
+            
+            if (weeksDetails.length === 0) {
+                listEl.innerHTML = `<div class="text-sm text-slate-500 italic text-center py-4">Aucune semaine enregistrée débutant ce mois-ci.</div>`;
+            } else {
+                weeksDetails.forEach(w => {
+                    const isPos = w.solde > 0;
+                    const isNeg = w.solde < 0;
+                    const colorClass = isPos ? 'text-green-600 dark:text-green-400 font-bold' : (isNeg ? 'text-red-600 dark:text-red-400 font-bold' : 'text-slate-600 dark:text-slate-400 font-semibold');
+                    
+                    const div = document.createElement('div');
+                    div.className = "flex justify-between items-center p-3 bg-white dark:bg-[#1e1f20] border border-slate-200 dark:border-slate-700 rounded-sm text-sm";
+                    div.innerHTML = `
+                        <div>
+                            <span class="font-semibold text-slate-800 dark:text-slate-200">Semaine ${w.weekNum}</span>
+                            <span class="text-slate-500 dark:text-slate-400 text-xs ml-2 hidden sm:inline">(du ${w.du} au ${w.au})</span>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <span class="text-slate-600 dark:text-slate-300">Total : ${formatHeuresSimple(w.total)}</span>
+                            <span class="w-16 text-right ${colorClass}">${formatHeuresText(w.solde)}</span>
+                        </div>
+                    `;
+                    listEl.appendChild(div);
+                });
+            }
+        }
+        // ---------------------------------------------
+
+        function exportPDF() {
+            document.querySelectorAll('input').forEach(input => input.setAttribute('value', input.value));
+            document.querySelectorAll('select').forEach(select => {
+                select.querySelectorAll('option').forEach(opt => {
+                    if (opt.value === select.value) opt.setAttribute('selected', 'selected');
+                    else opt.removeAttribute('selected');
+                });
+            });
+
+            const element = document.querySelector('.a4-page');
+            const originalBoxShadow = element.style.boxShadow;
+            const originalMargin = element.style.margin;
+            element.style.boxShadow = 'none';
+            element.style.margin = '0';
+            element.style.height = '296mm';
+
+            const week = document.getElementById('header-week').value || 'XX';
+            const nom = document.getElementById('profil-nom').value || 'nom';
+            const prenom = document.getElementById('profil-prenom').value || 'prenom';
+            const filename = `Pointage_S${week}_${nom.replace(/[^a-z0-9\u00C0-\u017F]/gi, '_')}_${prenom.replace(/[^a-z0-9\u00C0-\u017F]/gi, '_')}.pdf`;
+
+            // Supprimer la surbrillance bleue du jour
+            const highlightedElements = document.querySelectorAll('.col-today');
+            highlightedElements.forEach(el => el.classList.remove('col-today'));
+
+            if (typeof html2pdf === 'undefined') {
+                alert("La bibliothèque PDF est en cours de chargement, veuillez réessayer dans un instant.");
+                highlightToday();
+                return;
+            }
+
+            // DÉSACTIVER TEMPORAIREMENT LE MODE SOMBRE POUR L'IMPRESSION PDF
+            const wasDark = document.documentElement.classList.contains('dark');
+            if (wasDark) {
+                document.documentElement.classList.remove('dark');
+            }
+
+            // On attend un bref instant que le navigateur redessine la page sans le mode sombre
+            setTimeout(() => {
+                html2pdf().set({
+                    margin:       0,
+                    filename:     filename,
+                    image:        { type: 'png' },
+                    html2canvas:  { scale: 4, useCORS: true },
+                    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                }).from(element).save().then(() => {
+                    // Restaurer l'affichage original après export
+                    element.style.boxShadow = originalBoxShadow;
+                    element.style.margin = originalMargin;
+                    element.style.height = '';
+                    
+                    // Restaurer le mode sombre si nécessaire
+                    if (wasDark) {
+                        document.documentElement.classList.add('dark');
+                    }
+                    highlightToday();
+                });
+            }, 100);
+        }
+
+        // --- Init & Event Listeners ---
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // Initialisation du thème
+            applyTheme(currentTheme);
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+                if (currentTheme === 'auto') applyTheme('auto');
+            });
+
+            loadProfile();
+            changeWeek(0);
+            initBilanModal(); // Init du modal
+
+            document.getElementById('pointage-table').addEventListener('input', (e) => {
+                if (e.target.classList.contains('day-input')) {
+                    calculateTotals();
+                    triggerAutoSave();
+                } else if (e.target.tagName === 'INPUT') {
+                    triggerAutoSave();
+                }
+            });
+
+            document.getElementById('pointage-table').addEventListener('change', (e) => {
+                if (e.target.classList.contains('select-motif')) {
+                    saveCurrentWeek();
+                    loadWeek(currentMonday); 
+                }
+            });
+
+            document.querySelectorAll('#profil-nom, #profil-prenom, #profil-societe').forEach(input => {
+                input.addEventListener('input', () => {
+                    clearTimeout(autoSaveTimer);
+                    autoSaveTimer = setTimeout(saveProfile, 1000);
+                });
+            });
+            
+            // Fermer le modal si on clique en dehors
+            document.getElementById('bilan-modal').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeBilanModal();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,22 +1,26 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useStore } from '../store/useStore';
-import { ArrowLeft, Upload, Plus, Download, FileText, Search, Trash2, Minus, ChevronDown, ChevronLeft, ChevronUp, Menu, Settings, ArrowUpDown, Calendar, ClipboardList, Sliders, MoreHorizontal, HelpCircle, Keyboard, X, FolderOpen } from 'lucide-react';
+import { ArrowLeft, Upload, Plus, Download, FileText, Search, Trash2, Minus, ChevronDown, ChevronLeft, ChevronUp, Menu, Settings, Pencil, ArrowUpDown, Calendar, ClipboardList, Sliders, MoreHorizontal, HelpCircle, Keyboard, X, FolderOpen, MapPinned, Lock } from 'lucide-react';
 import { ProjectSettingsModal } from './ProjectSettingsModal';
 import { ComponentRef, ListViewPreferences, Project, ShortcutAction } from '../types';
 import * as XLSX from 'xlsx';
 import { ExportService } from '../services/ExportService';
 import { bindingFromEvent, DEFAULT_SHORTCUT_BINDINGS, formatShortcut, isShortcut, sameShortcut, SHORTCUT_ACTIONS, SHORTCUT_LABELS } from '../shortcuts';
+import { usePlanBridge } from '../usePlanBridge';
+import { isEditablePlanList } from '../planModel';
 
 function EditableQuantity({
   value,
   onSave,
   isTriggerAdd,
-  onModeConsumed
+  onModeConsumed,
+  locked
 }: {
   value: number;
   onSave: (val: number) => void;
   isTriggerAdd?: boolean;
   onModeConsumed?: () => void;
+  locked?: boolean;
 }) {
   const [mode, setMode] = useState<'view' | 'edit-abs' | 'edit-add' | 'edit-sub'>('view');
   const [tempValue, setTempValue] = useState<number | ''>('');
@@ -55,6 +59,17 @@ function EditableQuantity({
       if (isTriggerAdd) onModeConsumed?.();
     }
   };
+
+  if (locked) {
+    return (
+      <div className="flex items-center justify-center gap-1 h-7" title="Quantité verrouillée par le plan">
+        <Lock className="w-3.5 h-3.5 text-slate-400" />
+        <div className="px-2 bg-slate-100 text-slate-800 rounded-md min-w-[2.5rem] font-medium text-sm text-center flex items-center justify-center h-7 font-bold">
+          {value}
+        </div>
+      </div>
+    );
+  }
 
   if (mode !== 'view') {
     return (
@@ -173,11 +188,12 @@ function EditableReference({ value, onSave }: { value: string, onSave: (newRef: 
 type ColumnId = 'ref' | 'designation' | 'quantity' | 'status' | 'manufacturer' | 'fabCode' | 'listsInfo';
 
 export function ProjectView() {
-  const { currentProjectId, currentProject, closeProject, bomLines, manufacturers, addOrUpdateBOMLine, removeBOMLine, removeZeroQuantityLines, updateBOMLineQte, updateBOMLineRef, importBOMData, sublists, addSublist, removeSublist, currentProjectPath, shortcutBindings, setShortcutBindings, listViewPreferences, setListViewPreferences } = useStore();
+  const { currentProjectId, currentProject, closeProject, bomLines, manufacturers, addOrUpdateBOMLine, removeBOMLine, removeZeroQuantityLines, updateBOMLineQte, updateBOMLineRef, confirmMergeBOMLine, importBOMData, sublists, addSublist, removeSublist, currentProjectPath, shortcutBindings, setShortcutBindings, listViewPreferences, setListViewPreferences, markers, undoPlanAction, redoPlanAction } = useStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const newRefInputRef = useRef<HTMLInputElement>(null);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
+  const displayMenuRef = useRef<HTMLDivElement>(null);
 
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
   const [activeAddQtyLineId, setActiveAddQtyLineId] = useState<string | null>(null);
@@ -189,6 +205,7 @@ export function ProjectView() {
   const [showDisplayMenu, setShowDisplayMenu] = useState(false);
 
   const [activeView, setActiveView] = useState('Globale');
+  const [lastEditableListId, setLastEditableListId] = useState<string | null>(null);
   const projectSublists = useMemo(() => {
     const lists = sublists.filter(s => s.projectId === currentProjectId);
     if (currentProjectId && !lists.some(s => s.type === 'appro_anticipe' && s.name.toLowerCase() === 'liste achat')) {
@@ -204,6 +221,7 @@ export function ProjectView() {
   const [sortBy, setSortBy] = useState<'ref_fab' | 'date' | 'status'>('ref_fab');
   const selectView = (view: string) => {
     setActiveView(view);
+    if (isEditablePlanList(view)) setLastEditableListId(view);
     setSelectedLineId(null);
     setActiveAddQtyLineId(null);
     setShowActionsMenu(false);
@@ -242,6 +260,9 @@ export function ProjectView() {
       }
       if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target as Node)) {
         setShowActionsMenu(false);
+      }
+      if (displayMenuRef.current && !displayMenuRef.current.contains(event.target as Node)) {
+        setShowDisplayMenu(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -282,11 +303,35 @@ export function ProjectView() {
 
   // Saisie manuelle
   const [newRef, setNewRef] = useState('');
-  const [newQty, setNewQty] = useState<number | ''>(1);
+  const [newQty, setNewQty] = useState<number | ''>(0);
   const [newLocation, setNewLocation] = useState('');
 
   // Détails des références pour l'affichage (Cache local)
   const [refDetails, setRefDetails] = useState<Record<string, ComponentRef>>({});
+  const focusNewRefInput = useCallback(() => {
+    if (activeView === 'Globale' || activeView === 'EtatPrepa' || activeView === 'Chiffrage') return;
+    window.setTimeout(() => {
+      newRefInputRef.current?.focus();
+      newRefInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 50);
+  }, [activeView]);
+  usePlanBridge({
+    activeView,
+    lastEditableListId,
+    projectSublists,
+    selectedLineId,
+    onSelectLine: setSelectedLineId,
+    onSelectView: selectView,
+    onFocusAddReference: focusNewRefInput,
+    refDetails,
+  });
+  const lockedLineIds = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const marker of markers) {
+      counts.set(marker.bomLineId, (counts.get(marker.bomLineId) || 0) + 1);
+    }
+    return counts;
+  }, [markers]);
   // Suggestions pour l'autocomplétion
   const [suggestedRefs, setSuggestedRefs] = useState<ComponentRef[]>([]);
 
@@ -508,19 +553,29 @@ export function ProjectView() {
 
       if (isEditing) return;
 
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        void undoPlanAction();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        void redoPlanAction();
+        return;
+      }
+
       // A : Focus sur l'ajout d'une nouvelle référence
       if (isShortcut(e, shortcutBindings.addReference)) {
         if (activeView !== 'Globale' && activeView !== 'EtatPrepa' && activeView !== 'Chiffrage') {
           e.preventDefault();
-          newRefInputRef.current?.focus();
-          newRefInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          focusNewRefInput();
         }
         return;
       }
 
       // E : Ajouter une quantité à la référence sélectionnée
       if (isShortcut(e, shortcutBindings.addQuantity)) {
-        if (selectedLineId && activeView !== 'Globale' && activeView !== 'EtatPrepa' && activeView !== 'Chiffrage') {
+        if (selectedLineId && activeView !== 'Globale' && activeView !== 'EtatPrepa' && activeView !== 'Chiffrage' && !lockedLineIds.has(selectedLineId)) {
           e.preventDefault();
           setActiveAddQtyLineId(selectedLineId);
         }
@@ -570,7 +625,7 @@ export function ProjectView() {
       if (isShortcut(e, shortcutBindings.incrementQuantity)) {
         if (selectedLineId && activeView !== 'Globale' && activeView !== 'EtatPrepa' && activeView !== 'Chiffrage') {
           const line = viewLines.find(l => l.id === selectedLineId);
-          if (line) {
+          if (line && !lockedLineIds.has(line.id)) {
             e.preventDefault();
             updateBOMLineQte(line.id, line.quantity + 1);
           }
@@ -582,7 +637,7 @@ export function ProjectView() {
       if (isShortcut(e, shortcutBindings.decrementQuantity)) {
         if (selectedLineId && activeView !== 'Globale' && activeView !== 'EtatPrepa' && activeView !== 'Chiffrage') {
           const line = viewLines.find(l => l.id === selectedLineId);
-          if (line) {
+          if (line && !lockedLineIds.has(line.id)) {
             e.preventDefault();
             updateBOMLineQte(line.id, Math.max(0, line.quantity - 1));
           }
@@ -626,7 +681,7 @@ export function ProjectView() {
     return () => {
       window.removeEventListener('keydown', handleGlobalKeyDown);
     };
-  }, [viewLines, selectedLineId, activeView, showShortcutsModal, showDeleteZeroModal, showActionsMenu, showColDropdown, updateBOMLineQte, removeBOMLine, capturingShortcut, shortcutBindings]);
+  }, [viewLines, selectedLineId, activeView, showShortcutsModal, showDeleteZeroModal, showActionsMenu, showColDropdown, updateBOMLineQte, removeBOMLine, capturingShortcut, shortcutBindings, lockedLineIds, undoPlanAction, redoPlanAction, focusNewRefInput]);
 
   interface ImportConfig {
     sheetIndex: number;
@@ -667,7 +722,7 @@ export function ProjectView() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const confirmImport = () => {
+  const confirmImport = async () => {
     const allMappedData: Array<Record<string, unknown>> = [];
 
     for (const { wb } of pendingImports) {
@@ -703,7 +758,10 @@ export function ProjectView() {
     }
 
     if (allMappedData.length > 0 && currentProjectId) {
-      importBOMData(currentProjectId, allMappedData);
+      const result = await importBOMData(currentProjectId, allMappedData);
+      if (result.ignored > 0) {
+        alert(`${result.ignored} référence${result.ignored > 1 ? 's' : ''} déjà marquée${result.ignored > 1 ? 's' : ''} sur le plan ${result.ignored > 1 ? 'ont' : 'a'} été ignorée${result.ignored > 1 ? 's' : ''} à l'import.`);
+      }
     }
     setShowImportModal(false);
     setPendingImports([]);
@@ -728,7 +786,10 @@ export function ProjectView() {
       'Localisation': line.location || ''
     }));
 
-    await importBOMData(currentProjectId, mappedData);
+    const result = await importBOMData(currentProjectId, mappedData);
+    if (result.ignored > 0) {
+      alert(`${result.ignored} référence${result.ignored > 1 ? 's' : ''} déjà marquée${result.ignored > 1 ? 's' : ''} sur le plan ${result.ignored > 1 ? 'ont' : 'a'} été ignorée${result.ignored > 1 ? 's' : ''} à l'import.`);
+    }
   };
 
   const handleRefBlur = async () => {
@@ -766,16 +827,17 @@ export function ProjectView() {
       }
     }
 
-    addOrUpdateBOMLine({
+    const lineId = await addOrUpdateBOMLine({
       projectId: currentProjectId,
       ref: finalRef,
-      quantity: typeof newQty === 'number' && !isNaN(newQty) ? newQty : 1,
+      quantity: typeof newQty === 'number' && !isNaN(newQty) ? newQty : 0,
       sublistId: activeView,
       location: newLocation
     });
+    if (lineId) setSelectedLineId(lineId);
 
     setNewRef('');
-    setNewQty(1);
+    setNewQty(0);
     setNewLocation('');
   };
 
@@ -828,7 +890,7 @@ export function ProjectView() {
                 className="p-1.5 hover:bg-slate-100 rounded-md transition-colors text-slate-400 hover:text-slate-600 shrink-0"
                 title="Modifier les paramètres de l'affaire"
               >
-                <Settings className="w-4 h-4" />
+                <Pencil className="w-4 h-4" />
               </button>
             </div>
           )}
@@ -840,7 +902,8 @@ export function ProjectView() {
           </button>
         </div>
 
-        <div className={`flex-1 overflow-y-auto ${isSidebarOpen ? 'p-4' : 'hidden'}`}>
+        <div className={`flex-1 overflow-y-auto ${isSidebarOpen ? 'p-4' : 'min-h-0'}`} aria-hidden={!isSidebarOpen}>
+          {isSidebarOpen && (
 
           <div>
             <button
@@ -920,29 +983,10 @@ export function ProjectView() {
             </div>
           </div>
 
+          )}
         </div>
 
-        <div className={`relative border-t border-slate-200 p-3 shrink-0 ${isSidebarOpen ? '' : 'flex justify-center'}`}>
-          {showDisplayMenu && (
-            <div className="absolute bottom-full left-3 right-3 mb-2 w-56 bg-white border border-slate-200 rounded-xl shadow-xl z-30 p-3 space-y-3">
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Densité des lignes</p>
-              <div className="space-y-1">
-                {([
-                  ['comfortable', 'Confort'],
-                  ['compact', 'Compact'],
-                  ['dense', 'Très compact'],
-                ] as const).map(([density, label]) => (
-                  <button
-                    key={density}
-                    onClick={() => updateListViewPreferences({ density })}
-                    className={`w-full rounded-md px-2 py-1.5 text-left text-sm ${listViewPreferences.density === density ? 'bg-blue-50 font-medium text-blue-700' : 'text-slate-700 hover:bg-slate-50'}`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+        <div className={`relative border-t border-slate-200 p-3 shrink-0 ${isSidebarOpen ? '' : 'flex flex-col items-center gap-1'}`}>
           {isSidebarOpen && currentProjectPath && (
             <button
               onClick={() => void window.electronAPI?.showProjectInFolder(currentProjectPath)}
@@ -953,14 +997,36 @@ export function ProjectView() {
               <span>Ouvrir l'emplacement</span>
             </button>
           )}
-          <button
-            onClick={() => setShowDisplayMenu(!showDisplayMenu)}
-            className={`w-full px-3 py-2 rounded-md text-sm font-medium hover:bg-slate-100 flex items-center gap-2 transition-colors text-slate-600 ${isSidebarOpen ? '' : 'w-10 justify-center px-0'}`}
-            title="Paramètres de l'application"
-          >
-            <Settings className="w-4 h-4 shrink-0" />
-            {isSidebarOpen && <span>Paramètres</span>}
-          </button>
+          <div className="relative w-full" ref={displayMenuRef}>
+            {showDisplayMenu && (
+              <div className="absolute bottom-full left-0 mb-2 w-56 bg-white border border-slate-200 rounded-xl shadow-xl z-30 p-3 space-y-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Densité des lignes</p>
+                <div className="space-y-1">
+                  {([
+                    ['comfortable', 'Confort'],
+                    ['compact', 'Compact'],
+                    ['dense', 'Très compact'],
+                  ] as const).map(([density, label]) => (
+                    <button
+                      key={density}
+                      onClick={() => updateListViewPreferences({ density })}
+                      className={`w-full rounded-md px-2 py-1.5 text-left text-sm ${listViewPreferences.density === density ? 'bg-blue-50 font-medium text-blue-700' : 'text-slate-700 hover:bg-slate-50'}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <button
+              onClick={() => setShowDisplayMenu(!showDisplayMenu)}
+              className={`w-full px-3 py-2 rounded-md text-sm font-medium hover:bg-slate-100 flex items-center gap-2 transition-colors text-slate-600 ${isSidebarOpen ? '' : 'w-10 justify-center px-0'}`}
+              title="Paramètres de l'application"
+            >
+              <Settings className="w-4 h-4 shrink-0" />
+              {isSidebarOpen && <span>Paramètres</span>}
+            </button>
+          </div>
           <button
             onClick={() => {
               setShortcutError(null);
@@ -981,14 +1047,25 @@ export function ProjectView() {
         {/* Header */}
 
         {listViewPreferences.topPanelCollapsed ? (
-          <button
-            type="button"
-            onClick={() => updateListViewPreferences({ topPanelCollapsed: false })}
-            className="h-9 border-b border-slate-200 bg-white px-4 text-left text-sm font-medium text-slate-600 hover:bg-slate-50 flex items-center gap-2 shrink-0"
-          >
-            <ChevronDown className="w-4 h-4" />
-            Afficher les contrôles
-          </button>
+          <div className="h-9 border-b border-slate-200 bg-white px-2 flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => updateListViewPreferences({ topPanelCollapsed: false })}
+              className="flex-1 h-full text-left text-sm font-medium text-slate-600 hover:bg-slate-50 flex items-center gap-2 px-2 rounded-md"
+            >
+              <ChevronDown className="w-4 h-4" />
+              Afficher les contrôles
+            </button>
+            <button
+              type="button"
+              onClick={() => { void window.electronAPI?.openPlanWindow(); }}
+              className="px-2.5 h-7 text-blue-700 hover:bg-blue-50 rounded-md text-sm font-medium flex items-center gap-1.5"
+              title="Ouvrir la fenêtre Plan"
+            >
+              <MapPinned className="w-4 h-4" />
+              Plan
+            </button>
+          </div>
         ) : (
           <>
         {/* Project Info Banner */}
@@ -1082,6 +1159,15 @@ export function ProjectView() {
             </h1>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => { void window.electronAPI?.openPlanWindow(); }}
+              className="px-4 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-sm font-medium hover:bg-blue-100 flex items-center gap-2 transition-colors"
+              title="Ouvrir la fenêtre Plan"
+            >
+              <MapPinned className="w-4 h-4" />
+              Plan
+            </button>
             <button
               onClick={() => {
                 const subName = activeView === 'Globale' ? 'Liste globale' : activeView === 'EtatPrepa' ? 'État préparatoire' : activeView === 'Chiffrage' ? 'Chiffrage' : projectSublists.find(s => s.id === activeView)?.name || 'Vue';
@@ -1412,7 +1498,15 @@ export function ProjectView() {
                             ) : (
                               <EditableReference
                                 value={line.ref}
-                                onSave={(newRef) => updateBOMLineRef(line.id, newRef)}
+                                onSave={async (newRef) => {
+                                  const result = await updateBOMLineRef(line.id, newRef);
+                                  if (result && result.needsConfirm) {
+                                    const ok = window.confirm(
+                                      `La référence cible a déjà une quantité de ${result.needsConfirm.survivorQty}. Confirmer la fusion transférera ${result.needsConfirm.movingCount} pastille${result.needsConfirm.movingCount > 1 ? 's' : ''} et passera la quantité sous contrôle du plan.`
+                                    );
+                                    if (ok) await confirmMergeBOMLine(result.needsConfirm.fromId, result.needsConfirm.toId);
+                                  }
+                                }}
                               />
                             )}
                           </td>
@@ -1433,6 +1527,7 @@ export function ProjectView() {
                                   onSave={(newQty) => updateBOMLineQte(line.id, newQty)}
                                   isTriggerAdd={activeAddQtyLineId === line.id}
                                   onModeConsumed={() => setActiveAddQtyLineId(null)}
+                                  locked={lockedLineIds.has(line.id)}
                                 />
                               </React.Fragment>
                             )}

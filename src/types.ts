@@ -14,11 +14,18 @@ export type ChargeAffaire = {
   name: string;
 };
 
+export type ComponentType = {
+  id: number;
+  name: string;
+  color: string;
+};
+
 export type ComponentRef = {
   ref: string;
   designation: string;
   fabCode: string;
   weight?: number;
+  typeId?: number | null;
 };
 
 export type Project = {
@@ -100,10 +107,97 @@ export const DEFAULT_LIST_VIEW_PREFERENCES: ListViewPreferences = {
   bottomPanelCollapsed: false,
 };
 
+export type Plan = {
+  id: string;
+  storedName: string;
+  originalName: string;
+  pageCount: number;
+  fileStamp?: number;
+};
+
+export type SublistPlan = {
+  sublistId: string;
+  planId: string;
+};
+
+export type Marker = {
+  id: string;
+  planId: string;
+  page: number;
+  x: number;
+  y: number;
+  bomLineId: string;
+};
+
+export type PlanBrush = {
+  bomLineId: string;
+  sublistId: string;
+  sublistName: string;
+  ref: string;
+  designation: string;
+  typeName: string | null;
+  color: string;
+  quantity: number;
+};
+
+export type PlanMarkerView = Marker & {
+  sublistId: string;
+  sublistName: string;
+  ref: string;
+  designation: string;
+  typeName: string | null;
+  color: string;
+  quantity: number;
+  isCurrentList: boolean;
+  isCurrentRef: boolean;
+};
+
+export type PlanPendingConfirm = {
+  page: number;
+  x: number;
+  y: number;
+  quantity: number;
+};
+
+export type PlanWindowState = {
+  projectPath: string | null;
+  currentSublistId: string | null;
+  currentSublistName: string | null;
+  canAttach: boolean;
+  currentPlan: Plan | null;
+  reusablePlans: Plan[];
+  error: string | null;
+  brush: PlanBrush | null;
+  markers: PlanMarkerView[];
+  pendingConfirm: PlanPendingConfirm | null;
+  canUndo: boolean;
+  canRedo: boolean;
+  addReferenceShortcut: ShortcutBinding;
+};
+
+export type PlanWindowAction =
+  | { type: 'add'; sublistId: string; sourcePath: string }
+  | { type: 'reuse'; sublistId: string; planId: string }
+  | { type: 'place'; page: number; x: number; y: number }
+  | { type: 'remove'; markerId: string }
+  | { type: 'selectMarker'; markerId: string }
+  | { type: 'confirmPlace'; page: number; x: number; y: number }
+  | { type: 'cancelPlace' }
+  | { type: 'undo' }
+  | { type: 'redo' }
+  | { type: 'detach' }
+  | { type: 'replace'; sourcePath: string }
+  | { type: 'deletePlan' }
+  | { type: 'recoller'; sourcePath: string }
+  | { type: 'focusAddReference' };
+
 export type ProjectFileData = {
   project: Project;
   sublists: Sublist[];
   bomLines: BOMLine[];
+  plans: Plan[];
+  sublistPlans: SublistPlan[];
+  markers: Marker[];
 };
 
 export type AppConfig = {
@@ -148,6 +242,10 @@ export type ElectronApi = {
   addManufacturer: (data: Manufacturer) => Promise<{ success: boolean; error?: string }>;
   updateManufacturer: (oldCode: string, data: Manufacturer) => Promise<{ success: boolean; error?: string }>;
   deleteManufacturer: (code: string) => Promise<{ success: boolean; error?: string }>;
+  getComponentTypes: () => Promise<ComponentType[]>;
+  addComponentType: (data: { name: string; color: string }) => Promise<{ success: boolean; id?: number; error?: string }>;
+  updateComponentType: (id: number, data: { name: string; color: string }) => Promise<{ success: boolean; error?: string }>;
+  deleteComponentType: (id: number) => Promise<{ success: boolean; error?: string }>;
   getFiliales: () => Promise<Filiale[]>;
   addFiliale: (data: { name: string }) => Promise<{ success: boolean; id?: number; error?: string }>;
   updateFiliale: (id: number, data: { name: string }) => Promise<{ success: boolean; error?: string }>;
@@ -157,6 +255,18 @@ export type ElectronApi = {
   deleteChargeAffaire: (id: number) => Promise<{ success: boolean; error?: string }>;
   openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
   showProjectInFolder: (filePath: string) => Promise<{ success: boolean; error?: string }>;
+  openPlanWindow: () => Promise<void>;
+  closePlanWindow: () => Promise<void>;
+  pushPlanState: (state: PlanWindowState) => void;
+  onPlanWindowReady: (callback: () => void) => () => void;
+  onPlanAction: (callback: (action: PlanWindowAction) => void) => () => void;
+  onPlanState: (callback: (state: PlanWindowState) => void) => () => void;
+  sendPlanAction: (action: PlanWindowAction) => void;
+  notifyPlanWindowReady: () => void;
+  selectPlanPdf: () => Promise<string | null>;
+  copyPlanPdf: (projectPath: string, sourcePath: string, storedName: string) => Promise<{ success: boolean; pageCount?: number; error?: string }>;
+  deletePlanPdf: (projectPath: string, storedName: string) => Promise<{ success: boolean; error?: string }>;
+  readPlanPdf: (projectPath: string, storedName: string) => Promise<{ data: ArrayBuffer } | { error: string }>;
   checkForUpdates: () => Promise<void>;
   quitAndInstall: () => Promise<void>;
   onUpdateAvailable: (callback: (event: unknown, info: UpdateInfo) => void) => void;

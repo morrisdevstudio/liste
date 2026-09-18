@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Search, Database, Plus, Edit2, Trash2, ArrowLeft, UploadCloud, ChevronLeft, ChevronRight, ChevronDown, FolderOpen, X, Info, Key, Lock, Unlock } from 'lucide-react';
-import { ComponentRef, Manufacturer, Filiale } from '../types';
+import { ComponentRef, Manufacturer, Filiale, ComponentType } from '../types';
+import { NEUTRAL_TYPE_COLOR, normalizeHexColor } from '../componentTypes';
 import { useStore } from '../store/useStore';
 
 interface CatalogAdminProps {
@@ -8,7 +9,7 @@ interface CatalogAdminProps {
 }
 
 export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
-  const [activeTab, setActiveTab] = useState<'references' | 'manufacturers' | 'filiales'>('references');
+  const [activeTab, setActiveTab] = useState<'references' | 'types' | 'manufacturers' | 'filiales'>('references');
 
   const { dbFilePath, setDbFilePath, refreshCatalogs, chargeAffaires } = useStore();
   const isElectron = !!window.electronAPI;
@@ -28,6 +29,9 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
   const [filiales, setFiliales] = useState<Filiale[]>([]);
   const [filialeSearch, setFilialeSearch] = useState('');
 
+  const [componentTypes, setComponentTypes] = useState<ComponentType[]>([]);
+  const [typeSearch, setTypeSearch] = useState('');
+
   // UI State
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -43,15 +47,15 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
   // Modal Item State
   const [showItemModal, setShowItemModal] = useState(false);
   const [itemMode, setItemMode] = useState<'add' | 'edit'>('add');
-  const [editingItem, setEditingItem] = useState<ComponentRef | Manufacturer | Filiale | null>(null);
-  const [formData, setFormData] = useState<Partial<ComponentRef & Manufacturer & Filiale>>({});
+  const [editingItem, setEditingItem] = useState<ComponentRef | Manufacturer | Filiale | ComponentType | null>(null);
+  const [formData, setFormData] = useState<Partial<ComponentRef & Manufacturer & Filiale & ComponentType>>({});
   const [newCA, setNewCA] = useState('');
 
   // UI State
   const [expandedFiliales, setExpandedFiliales] = useState<number[]>([]);
 
   // Non-blocking UI State
-  const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'ref' | 'manuf' | 'filiale', id: string | number } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'ref' | 'manuf' | 'filiale' | 'type', id: string | number } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Security State
@@ -131,11 +135,35 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
     }
   }, []);
 
+  const fetchComponentTypes = useCallback(async (withLoading = true) => {
+    if (!window.electronAPI) return;
+    if (withLoading) setLoading(true);
+    try {
+      const data = await window.electronAPI.getComponentTypes();
+      setComponentTypes(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      if (withLoading) setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    const loader = activeTab === 'references' ? fetchReferences : activeTab === 'manufacturers' ? fetchManufacturers : fetchFiliales;
+    const loader = activeTab === 'references'
+      ? fetchReferences
+      : activeTab === 'types'
+        ? fetchComponentTypes
+        : activeTab === 'manufacturers'
+          ? fetchManufacturers
+          : fetchFiliales;
     const timer = window.setTimeout(() => void loader(), 0);
     return () => window.clearTimeout(timer);
-  }, [activeTab, fetchFiliales, fetchManufacturers, fetchReferences, filialeSearch, manufSearch]);
+  }, [activeTab, fetchComponentTypes, fetchFiliales, fetchManufacturers, fetchReferences, filialeSearch, manufSearch, typeSearch]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void fetchComponentTypes(false), 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchComponentTypes]);
 
   const handlePreviewExcel = async () => {
     if (!window.electronAPI) return;
@@ -227,14 +255,28 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
     } else setErrorMsg('Erreur : ' + res?.error);
   };
 
-  const handleOpenItemModal = (mode: 'add' | 'edit', item?: ComponentRef | Manufacturer | Filiale) => {
+  const handleDeleteType = (id: number) => {
+    setDeleteConfirm({ type: 'type', id });
+  };
+
+  const executeDeleteType = async (id: number) => {
+    const res = await window.electronAPI?.deleteComponentType(id);
+    if (res?.success) {
+      fetchComponentTypes();
+      fetchReferences();
+    } else setErrorMsg('Erreur : ' + res?.error);
+  };
+
+  const handleOpenItemModal = (mode: 'add' | 'edit', item?: ComponentRef | Manufacturer | Filiale | ComponentType) => {
     setItemMode(mode);
     setEditingItem(item || null);
     setNewCA('');
     if (activeTab === 'references') {
-      setFormData(item ? { ...item } : { ref: '', designation: '', fabCode: '', weight: '' });
+      setFormData(item ? { ...item } : { ref: '', designation: '', fabCode: '', weight: '', typeId: null });
     } else if (activeTab === 'manufacturers') {
       setFormData(item ? { ...item } : { code: '', name: '' });
+    } else if (activeTab === 'types') {
+      setFormData(item ? { ...item } : { name: '', color: '#3388FF' });
     } else {
       setFormData(item ? { ...item } : { name: '' });
     }
@@ -267,7 +309,7 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
     setLoading(true);
     try {
       if (activeTab === 'references') {
-        const data: ComponentRef = { ref: formData.ref || '', designation: formData.designation || '', fabCode: formData.fabCode || '', weight: typeof formData.weight === 'number' ? formData.weight : undefined };
+        const data: ComponentRef = { ref: formData.ref || '', designation: formData.designation || '', fabCode: formData.fabCode || '', weight: typeof formData.weight === 'number' ? formData.weight : undefined, typeId: formData.typeId ?? null };
         let res;
         if (itemMode === 'add') res = await window.electronAPI.addReference(data);
         else res = await window.electronAPI.updateReference(editingItem.ref, data);
@@ -286,6 +328,16 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
           setShowItemModal(false);
           fetchManufacturers();
           refreshCatalogs();
+        } else setErrorMsg("Erreur: " + res.error);
+      } else if (activeTab === 'types') {
+        const data = { name: formData.name || '', color: formData.color || '' };
+        let res;
+        if (itemMode === 'add') res = await window.electronAPI.addComponentType(data);
+        else res = await window.electronAPI.updateComponentType((editingItem as ComponentType).id, data);
+
+        if (res.success) {
+          setShowItemModal(false);
+          fetchComponentTypes();
         } else setErrorMsg("Erreur: " + res.error);
       } else {
         let res;
@@ -318,6 +370,12 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
     f.name.toLowerCase().includes(filialeSearch.toLowerCase())
   );
 
+  const filteredTypes = componentTypes.filter(t =>
+    t.name.toLowerCase().includes(typeSearch.toLowerCase())
+  );
+
+  const typeById = new Map<number, ComponentType>(componentTypes.map((t): [number, ComponentType] => [t.id, t]));
+
   return (
     <div className="flex flex-col h-full bg-slate-50 relative">
       {/* Error Toast */}
@@ -344,7 +402,7 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
               <Database className="w-5 h-5 mr-2 text-blue-600" />
               Administration du Catalogue
             </h1>
-            <p className="text-sm text-slate-500">Gérez vos références et fabricants</p>
+            <p className="text-sm text-slate-500">Gérez vos références, types d'appareils et fabricants</p>
           </div>
         </div>
 
@@ -415,6 +473,15 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
             Références
           </button>
           <button
+            onClick={() => setActiveTab('types')}
+            className={`px-6 py-2 rounded-lg font-medium transition-all ${activeTab === 'types'
+              ? 'bg-white text-blue-700 shadow-sm'
+              : 'text-slate-600 hover:text-slate-900'
+              }`}
+          >
+            Types
+          </button>
+          <button
             onClick={() => setActiveTab('manufacturers')}
             className={`px-6 py-2 rounded-lg font-medium transition-all ${activeTab === 'manufacturers'
               ? 'bg-white text-blue-700 shadow-sm'
@@ -443,12 +510,14 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
               <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder={`Rechercher ${activeTab === 'references' ? 'une référence...' : activeTab === 'manufacturers' ? 'un fabricant...' : 'une filiale...'}`}
-                value={activeTab === 'references' ? refSearch : activeTab === 'manufacturers' ? manufSearch : filialeSearch}
+                placeholder={`Rechercher ${activeTab === 'references' ? 'une référence...' : activeTab === 'types' ? 'un type...' : activeTab === 'manufacturers' ? 'un fabricant...' : 'une filiale...'}`}
+                value={activeTab === 'references' ? refSearch : activeTab === 'types' ? typeSearch : activeTab === 'manufacturers' ? manufSearch : filialeSearch}
                 onChange={(e) => {
                   if (activeTab === 'references') {
                     setRefSearch(e.target.value);
                     setRefPage(1);
+                  } else if (activeTab === 'types') {
+                    setTypeSearch(e.target.value);
                   } else if (activeTab === 'manufacturers') {
                     setManufSearch(e.target.value);
                   } else {
@@ -485,6 +554,7 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
                       <th className="py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Référence</th>
                       <th className="py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Désignation</th>
                       <th className="py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Code Fab.</th>
+                      <th className="py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Type</th>
                       <th className="py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Poids</th>
                       {isUnlocked && <th className="py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</th>}
                     </tr>
@@ -492,6 +562,12 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
                     <tr>
                       <th className="py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Code Fabricant</th>
                       <th className="py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Nom du Fabricant</th>
+                      {isUnlocked && <th className="py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</th>}
+                    </tr>
+                  ) : activeTab === 'types' ? (
+                    <tr>
+                      <th className="py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Nom du type</th>
+                      <th className="py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Couleur</th>
                       {isUnlocked && <th className="py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</th>}
                     </tr>
                   ) : (
@@ -509,6 +585,16 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
                           <td className="py-3 px-6 font-mono text-sm text-slate-800">{r.ref}</td>
                           <td className="py-3 px-6 text-sm text-slate-600">{r.designation}</td>
                           <td className="py-3 px-6 text-sm text-slate-500">{r.fabCode}</td>
+                          <td className="py-3 px-6 text-sm">
+                            {typeById.get(r.typeId ?? -1) ? (
+                              <span className="inline-flex items-center gap-2">
+                                <span className="w-3 h-3 rounded-full border border-slate-200" style={{ backgroundColor: typeById.get(r.typeId ?? -1)?.color }} />
+                                <span className="text-slate-700">{typeById.get(r.typeId ?? -1)?.name}</span>
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">Sans type</span>
+                            )}
+                          </td>
                           <td className="py-3 px-6 text-sm text-slate-500">{r.weight ? `${r.weight} kg` : '-'}</td>
                           {isUnlocked && (
                             <td className="py-3 px-6 text-right">
@@ -521,7 +607,7 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
                         </tr>
                       ))
                     ) : (
-                      <tr><td colSpan={isUnlocked ? 5 : 4} className="py-8 text-center text-slate-500">Aucune référence trouvée.</td></tr>
+                      <tr><td colSpan={isUnlocked ? 6 : 5} className="py-8 text-center text-slate-500">Aucune référence trouvée.</td></tr>
                     )
                   ) : activeTab === 'manufacturers' ? (
                     filteredManufacturers.length > 0 ? (
@@ -541,6 +627,30 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
                       ))
                     ) : (
                       <tr><td colSpan={isUnlocked ? 3 : 2} className="py-8 text-center text-slate-500">Aucun fabricant trouvé.</td></tr>
+                    )
+                  ) : activeTab === 'types' ? (
+                    filteredTypes.length > 0 ? (
+                      filteredTypes.map(t => (
+                        <tr key={t.id} className="hover:bg-slate-50 transition-colors group">
+                          <td className="py-3 px-6 text-sm text-slate-800 font-medium">{t.name}</td>
+                          <td className="py-3 px-6">
+                            <span className="inline-flex items-center gap-2 text-sm text-slate-600">
+                              <span className="w-4 h-4 rounded-full border border-slate-200" style={{ backgroundColor: t.color }} />
+                              <span className="font-mono text-xs">{t.color}</span>
+                            </span>
+                          </td>
+                          {isUnlocked && (
+                            <td className="py-3 px-6 text-right">
+                              <div className="flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onClick={() => requireUnlock(() => handleOpenItemModal('edit', t))} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"><Edit2 className="w-4 h-4" /></button>
+                                <button onClick={() => requireUnlock(() => handleDeleteType(t.id))} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"><Trash2 className="w-4 h-4" /></button>
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      ))
+                    ) : (
+                      <tr><td colSpan={isUnlocked ? 3 : 2} className="py-8 text-center text-slate-500">Aucun type trouvé.</td></tr>
                     )
                   ) : (
                     filteredFiliales.length > 0 ? (
@@ -808,7 +918,7 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <h2 className="text-xl font-bold text-slate-800">
-                {itemMode === 'add' ? 'Ajouter' : 'Modifier'} {activeTab === 'references' ? 'une référence' : activeTab === 'manufacturers' ? 'un fabricant' : 'une filiale'}
+                {itemMode === 'add' ? 'Ajouter' : 'Modifier'} {activeTab === 'references' ? 'une référence' : activeTab === 'types' ? 'un type' : activeTab === 'manufacturers' ? 'un fabricant' : 'une filiale'}
               </h2>
               <button 
                 onClick={() => setShowItemModal(false)}
@@ -841,6 +951,17 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
                     <input type="number" step="any" className="w-full border-slate-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 py-2 px-3 border" 
                       value={formData.weight || ''} onChange={e => setFormData({...formData, weight: e.target.value})} />
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Type d'appareil</label>
+                    <select className="w-full border-slate-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 py-2 px-3 border bg-white"
+                      value={formData.typeId ?? ''}
+                      onChange={e => setFormData({...formData, typeId: e.target.value ? Number(e.target.value) : null})}>
+                      <option value="">Sans type</option>
+                      {componentTypes.map(t => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
                 </>
               ) : activeTab === 'manufacturers' ? (
                 <>
@@ -853,6 +974,25 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
                     <label className="block text-sm font-medium text-slate-700 mb-1">Nom du Fabricant <span className="text-red-500">*</span></label>
                     <input type="text" className="w-full border-slate-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 py-2 px-3 border" 
                       value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
+                  </div>
+                </>
+              ) : activeTab === 'types' ? (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Nom du type <span className="text-red-500">*</span></label>
+                    <input type="text" className="w-full border-slate-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 py-2 px-3 border"
+                      value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Couleur <span className="text-red-500">*</span></label>
+                    <div className="flex items-center gap-3">
+                      <input type="color" className="h-10 w-14 cursor-pointer rounded border border-slate-300 bg-white p-1"
+                        value={normalizeHexColor(String(formData.color || '')) || '#3388FF'}
+                        onChange={e => setFormData({...formData, color: e.target.value.toUpperCase()})} />
+                      <input type="text" className="flex-1 border-slate-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 py-2 px-3 border font-mono"
+                        value={formData.color || ''} onChange={e => setFormData({...formData, color: e.target.value})} />
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2">La teinte neutre ({NEUTRAL_TYPE_COLOR}) est réservée aux références sans type. Une couleur déjà prise est refusée.</p>
                   </div>
                 </>
               ) : (
@@ -899,7 +1039,7 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
               </button>
               <button
                 onClick={handleSaveItem}
-                disabled={loading || (activeTab === 'references' ? (!formData.ref || !formData.designation || !formData.fabCode) : activeTab === 'manufacturers' ? (!formData.code || !formData.name) : !formData.name)}
+                disabled={loading || (activeTab === 'references' ? (!formData.ref || !formData.designation || !formData.fabCode) : activeTab === 'manufacturers' ? (!formData.code || !formData.name) : activeTab === 'types' ? (!formData.name || !formData.color) : !formData.name)}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium shadow-sm transition-colors disabled:opacity-50"
               >
                 {loading ? 'Enregistrement...' : 'Enregistrer'}
@@ -914,7 +1054,7 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-[90vh] overflow-hidden flex flex-col p-6 text-center">
             <h3 className="text-lg font-bold text-slate-800 mb-2">Confirmer la suppression</h3>
-            <p className="text-slate-600 mb-6">Êtes-vous sûr de vouloir supprimer {deleteConfirm.type === 'ref' ? `la référence ${deleteConfirm.id}` : deleteConfirm.type === 'manuf' ? `le fabricant ${deleteConfirm.id}` : `cette filiale`} ?</p>
+            <p className="text-slate-600 mb-6">Êtes-vous sûr de vouloir supprimer {deleteConfirm.type === 'ref' ? `la référence ${deleteConfirm.id}` : deleteConfirm.type === 'manuf' ? `le fabricant ${deleteConfirm.id}` : deleteConfirm.type === 'type' ? 'ce type (les références associées passeront sans type)' : 'cette filiale'} ?</p>
             <div className="flex items-center justify-center gap-3">
               <button 
                 onClick={() => setDeleteConfirm(null)}
@@ -926,6 +1066,7 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
                 onClick={() => {
                   if (deleteConfirm.type === 'ref') executeDeleteRef(deleteConfirm.id as string);
                   else if (deleteConfirm.type === 'manuf') executeDeleteManuf(deleteConfirm.id as string);
+                  else if (deleteConfirm.type === 'type') executeDeleteType(deleteConfirm.id as number);
                   else executeDeleteFiliale(deleteConfirm.id as number);
                   setDeleteConfirm(null);
                 }}

@@ -5,12 +5,45 @@ import { fileURLToPath } from 'url';
 import Database from 'better-sqlite3';
 import * as xlsx from 'xlsx';
 import { autoUpdater } from 'electron-updater';
-import type { AppConfig, CatalogImportMapping, ComponentRef, Manufacturer, ProjectFileData } from '../src/types';
+import { PDFDocument } from 'pdf-lib';
+import type { AppConfig, CatalogImportMapping, ComponentRef, Manufacturer, PlanWindowState, ProjectFileData } from '../src/types';
+import { DEFAULT_COMPONENT_TYPES, isNeutralColor, normalizeHexColor } from '../src/componentTypes';
 
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
 
 const _filename = fileURLToPath(import.meta.url);
 const _dirname = path.dirname(_filename);
+
+function parseTypeId(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const id = typeof value === 'number' ? value : Number(value);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+function validateTypeColor(color: string, excludeId?: number): string {
+  const normalized = normalizeHexColor(color);
+  if (!normalized) throw new Error('Couleur invalide.');
+  if (isNeutralColor(normalized)) throw new Error('La teinte neutre est réservée et ne peut pas être attribuée à un type.');
+  const existing = excludeId
+    ? getDb().prepare('SELECT id FROM component_types WHERE color = ? AND id != ?').get(normalized, excludeId)
+    : getDb().prepare('SELECT id FROM component_types WHERE color = ?').get(normalized);
+  if (existing) throw new Error('Cette couleur est déjà attribuée à un autre type.');
+  return normalized;
+}
+
+function assertTypeExists(typeId: number | null): number | null {
+  if (typeId === null) return null;
+  const row = getDb().prepare('SELECT id FROM component_types WHERE id = ?').get(typeId);
+  if (!row) throw new Error('Type introuvable.');
+  return typeId;
+}
+
+function mapTypeError(error: unknown): string {
+  const msg = errorMessage(error);
+  if (msg.includes('UNIQUE constraint failed: component_types.name')) return 'Ce nom de type existe déjà.';
+  if (msg.includes('UNIQUE constraint failed: component_types.color')) return 'Cette couleur est déjà attribuée à un autre type.';
+  return msg;
+}
 
 // Dynamic Database instance
 let db: Database.Database | null = null;
@@ -77,6 +110,27 @@ function getDb(forceDbPath?: string): Database.Database {
     );
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS component_types (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      color TEXT NOT NULL UNIQUE
+    );
+  `);
+
+  const refCols = db.prepare('PRAGMA table_info(references_data)').all() as Array<{ name: string }>;
+  if (!refCols.some((col) => col.name === 'typeId')) {
+    db.exec('ALTER TABLE references_data ADD COLUMN typeId INTEGER');
+  }
+
+  const typeCount = db.prepare('SELECT COUNT(*) AS n FROM component_types').get() as { n: number };
+  if (typeCount.n === 0) {
+    const insertType = db.prepare('INSERT INTO component_types (name, color) VALUES (?, ?)');
+    for (const type of DEFAULT_COMPONENT_TYPES) {
+      insertType.run(type.name, type.color.toUpperCase());
+    }
+  }
+
   // Initialize default password if not exists
   try {
     const stmt = db.prepare("SELECT value FROM settings WHERE key = 'adminPassword'");
@@ -92,8 +146,115 @@ function getDb(forceDbPath?: string): Database.Database {
 }
 
 let mainWindow: BrowserWindow | null = null;
+let planWindow: BrowserWindow | null = null;
+let allowPlanWindowClose = false;
+let lastPlanState: PlanWindowState | null = null;
 let pendingProjectFile = findProjectFile(process.argv);
 let projectOpenReceiverReady = false;
+
+const STORED_PLAN_NAME = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.pdf$/i;
+
+function rendererUrl(hash?: string): { type: 'url' | 'file'; value: string; hash?: string } {
+  if (process.env.VITE_DEV_SERVER_URL) {
+    return { type: 'url', value: hash ? `${process.env.VITE_DEV_SERVER_URL}${hash}` : process.env.VITE_DEV_SERVER_URL };
+  }
+  return { type: 'file', value: path.join(_dirname, '../dist/index.html'), hash };
+}
+
+function loadRenderer(win: BrowserWindow, hash?: string) {
+  const target = rendererUrl(hash);
+  if (target.type === 'url') {
+    void win.loadURL(target.value);
+  } else {
+    void win.loadFile(target.value, target.hash ? { hash: target.hash.replace(/^#/, '') } : undefined);
+  }
+}
+
+function getPlansDir(projectPath: string): string {
+  if (!path.isAbsolute(projectPath) || path.extname(projectPath).toLowerCase() !== '.list') {
+    throw new Error('Fichier affaire invalide.');
+  }
+  const dir = path.dirname(projectPath);
+  const base = path.basename(projectPath, path.extname(projectPath));
+  return path.join(dir, `${base}.plans`);
+}
+
+function assertStoredPlanName(storedName: string) {
+  if (!STORED_PLAN_NAME.test(storedName)) {
+    throw new Error('Nom de fichier plan invalide.');
+  }
+}
+
+async function countPdfPages(filePath: string): Promise<number> {
+  try {
+    const pdf = await PDFDocument.load(fs.readFileSync(filePath), { ignoreEncryption: true });
+    return pdf.getPageCount();
+  } catch {
+    return 1;
+  }
+}
+
+function destroyPlanWindow() {
+  lastPlanState = null;
+  if (!planWindow || planWindow.isDestroyed()) {
+    planWindow = null;
+    allowPlanWindowClose = false;
+    return;
+  }
+  allowPlanWindowClose = true;
+  const win = planWindow;
+  planWindow = null;
+  win.once('closed', () => {
+    allowPlanWindowClose = false;
+  });
+  win.close();
+}
+
+function createPlanWindow() {
+  allowPlanWindowClose = false;
+  planWindow = new BrowserWindow({
+    title: 'Plan',
+    width: 1100,
+    height: 800,
+    webPreferences: {
+      preload: path.join(_dirname, 'preload.mjs'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+    },
+    icon: path.join(_dirname, '../public/icon.ico'),
+  });
+
+  planWindow.setMenu(null);
+
+  planWindow.on('close', (event) => {
+    if (allowPlanWindowClose) return;
+    event.preventDefault();
+    planWindow?.hide();
+  });
+
+  planWindow.on('closed', () => {
+    planWindow = null;
+  });
+
+  planWindow.webContents.on('did-finish-load', () => {
+    if (lastPlanState && planWindow && !planWindow.isDestroyed()) {
+      planWindow.webContents.send('plan-state', lastPlanState);
+    }
+  });
+
+  loadRenderer(planWindow, '#/plan');
+}
+
+function openOrFocusPlanWindow() {
+  if (planWindow && !planWindow.isDestroyed()) {
+    if (planWindow.isMinimized()) planWindow.restore();
+    planWindow.show();
+    planWindow.focus();
+    return;
+  }
+  createPlanWindow();
+}
 
 function findProjectFile(commandLine: string[]): string | null {
   const filePath = commandLine.find(argument => path.extname(argument).toLowerCase() === '.list');
@@ -140,11 +301,12 @@ function createWindow() {
 
   mainWindow.setMenu(null);
 
-  if (process.env.VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
-  } else {
-    mainWindow.loadFile(path.join(_dirname, '../dist/index.html'));
-  }
+  loadRenderer(mainWindow);
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+    destroyPlanWindow();
+  });
 }
 
 ipcMain.handle('take-startup-project-file', () => {
@@ -632,17 +794,24 @@ ipcMain.handle('import-excel-catalog', async (_event, filePath: string, mapping:
              }
            }
            
-           if (validRows.length > 0) {
-             const insertRef = getDb().prepare('INSERT OR REPLACE INTO references_data (ref, designation, fabCode, weight) VALUES (?, ?, ?, ?)');
-             
-             for (const item of validRows) {
-               try {
-                  insertRef.run(item.ref, item.des, item.fab, item.weight);
-               } catch (err) {
-                  console.warn('Duplicate or error inserting ref:', item.ref, err);
-               }
-             }
-           }
+          if (validRows.length > 0) {
+            const insertRef = getDb().prepare(`
+              INSERT INTO references_data (ref, designation, fabCode, weight, typeId)
+              VALUES (?, ?, ?, ?, (SELECT typeId FROM references_data WHERE ref = ?))
+              ON CONFLICT(ref) DO UPDATE SET
+                designation = excluded.designation,
+                fabCode = excluded.fabCode,
+                weight = excluded.weight
+            `);
+            
+            for (const item of validRows) {
+              try {
+                 insertRef.run(item.ref, item.des, item.fab, item.weight, item.ref);
+              } catch (err) {
+                 console.warn('Duplicate or error inserting ref:', item.ref, err);
+              }
+            }
+          }
         }
       }
     });
@@ -685,8 +854,9 @@ ipcMain.handle('get-paginated-references', async (_event, page: number, pageSize
 // Basic CRUD for References
 ipcMain.handle('add-reference', async (_event, data: ComponentRef) => {
   try {
-    const stmt = getDb().prepare('INSERT INTO references_data (ref, designation, fabCode, weight) VALUES (?, ?, ?, ?)');
-    stmt.run(data.ref, data.designation, data.fabCode, data.weight || null);
+    const typeId = assertTypeExists(parseTypeId(data.typeId));
+    const stmt = getDb().prepare('INSERT INTO references_data (ref, designation, fabCode, weight, typeId) VALUES (?, ?, ?, ?, ?)');
+    stmt.run(data.ref, data.designation, data.fabCode, data.weight || null, typeId);
     return { success: true };
   } catch (error) {
     return { success: false, error: errorMessage(error) };
@@ -695,8 +865,9 @@ ipcMain.handle('add-reference', async (_event, data: ComponentRef) => {
 
 ipcMain.handle('update-reference', async (_event, oldRef: string, data: ComponentRef) => {
   try {
-    const stmt = getDb().prepare('UPDATE references_data SET ref = ?, designation = ?, fabCode = ?, weight = ? WHERE ref = ?');
-    stmt.run(data.ref, data.designation, data.fabCode, data.weight || null, oldRef);
+    const typeId = assertTypeExists(parseTypeId(data.typeId));
+    const stmt = getDb().prepare('UPDATE references_data SET ref = ?, designation = ?, fabCode = ?, weight = ?, typeId = ? WHERE ref = ?');
+    stmt.run(data.ref, data.designation, data.fabCode, data.weight || null, typeId, oldRef);
     return { success: true };
   } catch (error) {
     return { success: false, error: errorMessage(error) };
@@ -742,6 +913,56 @@ ipcMain.handle('delete-manufacturer', async (_event, code: string) => {
   }
 });
 
+
+ipcMain.handle('get-component-types', async () => {
+  try {
+    return getDb().prepare('SELECT id, name, color FROM component_types ORDER BY name ASC').all();
+  } catch (error) {
+    console.error('Error fetching component types:', error);
+    return [];
+  }
+});
+
+ipcMain.handle('add-component-type', async (_event, data: { name: string; color: string }) => {
+  try {
+    const name = String(data.name || '').trim();
+    if (!name) throw new Error('Le nom du type est obligatoire.');
+    const color = validateTypeColor(data.color);
+    const result = getDb().prepare('INSERT INTO component_types (name, color) VALUES (?, ?)').run(name, color);
+    return { success: true, id: Number(result.lastInsertRowid) };
+  } catch (error) {
+    return { success: false, error: mapTypeError(error) };
+  }
+});
+
+ipcMain.handle('update-component-type', async (_event, id: number, data: { name: string; color: string }) => {
+  try {
+    const name = String(data.name || '').trim();
+    if (!name) throw new Error('Le nom du type est obligatoire.');
+    const color = validateTypeColor(data.color, id);
+    const result = getDb().prepare('UPDATE component_types SET name = ?, color = ? WHERE id = ?').run(name, color, id);
+    if (result.changes === 0) throw new Error('Type introuvable.');
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: mapTypeError(error) };
+  }
+});
+
+ipcMain.handle('delete-component-type', async (_event, id: number) => {
+  try {
+    const database = getDb();
+    const tx = database.transaction(() => {
+      database.prepare('UPDATE references_data SET typeId = NULL WHERE typeId = ?').run(id);
+      const result = database.prepare('DELETE FROM component_types WHERE id = ?').run(id);
+      if (result.changes === 0) throw new Error('Type introuvable.');
+    });
+    tx();
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: mapTypeError(error) };
+  }
+});
+
 ipcMain.handle('open-external', async (_event, url: string) => {
   try {
     await shell.openExternal(url);
@@ -757,6 +978,98 @@ ipcMain.handle('show-project-in-folder', async (_event, filePath: string) => {
       return { success: false, error: 'Fichier liste introuvable.' };
     }
     shell.showItemInFolder(filePath);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: errorMessage(error) };
+  }
+});
+
+ipcMain.handle('open-plan-window', async () => {
+  openOrFocusPlanWindow();
+});
+
+ipcMain.handle('close-plan-window', async () => {
+  destroyPlanWindow();
+});
+
+ipcMain.on('plan-state', (_event, state: PlanWindowState) => {
+  lastPlanState = state;
+  if (planWindow && !planWindow.isDestroyed()) {
+    planWindow.webContents.send('plan-state', state);
+  }
+});
+
+ipcMain.on('plan-action', (_event, action: { type?: string }) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (action?.type === 'focusAddReference') {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+    mainWindow.webContents.send('plan-action', action);
+  }
+});
+
+ipcMain.on('plan-window-ready', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('plan-window-ready');
+  }
+  if (lastPlanState && planWindow && !planWindow.isDestroyed()) {
+    planWindow.webContents.send('plan-state', lastPlanState);
+  }
+});
+
+ipcMain.handle('select-plan-pdf', async (event) => {
+  const senderWindow = BrowserWindow.fromWebContents(event.sender) ?? planWindow ?? mainWindow;
+  if (!senderWindow) return null;
+  const result = await dialog.showOpenDialog(senderWindow, {
+    properties: ['openFile'],
+    filters: [{ name: 'PDF', extensions: ['pdf'] }],
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0];
+});
+
+ipcMain.handle('copy-plan-pdf', async (_event, projectPath: string, sourcePath: string, storedName: string) => {
+  try {
+    assertStoredPlanName(storedName);
+    if (!path.isAbsolute(sourcePath) || !fs.existsSync(sourcePath)) {
+      return { success: false, error: 'Fichier PDF introuvable.' };
+    }
+    const plansDir = getPlansDir(projectPath);
+    fs.mkdirSync(plansDir, { recursive: true });
+    const destPath = path.join(plansDir, storedName);
+    fs.copyFileSync(sourcePath, destPath);
+    const pageCount = await countPdfPages(destPath);
+    return { success: true, pageCount };
+  } catch (error) {
+    return { success: false, error: errorMessage(error) };
+  }
+});
+
+ipcMain.handle('read-plan-pdf', async (_event, projectPath: string, storedName: string) => {
+  try {
+    assertStoredPlanName(storedName);
+    const destPath = path.join(getPlansDir(projectPath), storedName);
+    if (!fs.existsSync(destPath)) {
+      return { error: 'Le fichier du plan est introuvable.' };
+    }
+    const data = new Uint8Array(fs.readFileSync(destPath));
+    return { data };
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+});
+
+ipcMain.handle('delete-plan-pdf', async (_event, projectPath: string, storedName: string) => {
+  try {
+    assertStoredPlanName(storedName);
+    const destPath = path.join(getPlansDir(projectPath), storedName);
+    if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
+    const dir = getPlansDir(projectPath);
+    if (fs.existsSync(dir) && fs.readdirSync(dir).length === 0) {
+      fs.rmdirSync(dir);
+    }
     return { success: true };
   } catch (error) {
     return { success: false, error: errorMessage(error) };

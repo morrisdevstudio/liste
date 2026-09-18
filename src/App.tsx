@@ -4,8 +4,20 @@ import { Dashboard } from './components/Dashboard';
 import { ProjectView } from './components/ProjectView';
 import { CatalogAdmin } from './components/CatalogAdmin';
 import { UpdateNotifier } from './components/UpdateNotifier';
+import { PlanWindow } from './components/PlanWindow';
+
+function isPlanWindow() {
+  return window.location.hash === '#/plan';
+}
 
 export default function App() {
+  if (isPlanWindow()) {
+    return <PlanWindow />;
+  }
+  return <MainApp />;
+}
+
+function MainApp() {
   const { currentProjectId, isLoaded, loadState, openProjectByPath } = useStore();
   const [showAdmin, setShowAdmin] = useState(false);
 
