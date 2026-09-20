@@ -723,9 +723,7 @@ export const useStore = create<AppState>((set, get) => ({
     const previousQuantity = line.quantity;
     set({
       markers: remaining,
-      bomLines: remainingCount > 0
-        ? state.bomLines.map((item) => item.id === marker.bomLineId ? { ...item, quantity: remainingCount } : item)
-        : state.bomLines,
+      bomLines: state.bomLines.map((item) => item.id === marker.bomLineId ? { ...item, quantity: remainingCount } : item),
       planUndo: [...state.planUndo, { type: 'remove' as const, marker, previousQuantity }].slice(-100),
       planRedo: [],
     });
@@ -772,9 +770,7 @@ export const useStore = create<AppState>((set, get) => ({
       const remainingCount = remaining.filter((item) => item.bomLineId === entry.marker.bomLineId).length;
       set({
         markers: remaining,
-        bomLines: remainingCount > 0
-          ? state.bomLines.map((item) => item.id === entry.marker.bomLineId ? { ...item, quantity: remainingCount } : item)
-          : state.bomLines.map((item) => item.id === entry.marker.bomLineId ? { ...item, quantity: entry.previousQuantity } : item),
+        bomLines: state.bomLines.map((item) => item.id === entry.marker.bomLineId ? { ...item, quantity: remainingCount } : item),
         planUndo: [...state.planUndo, entry],
         planRedo: state.planRedo.slice(0, -1),
       });

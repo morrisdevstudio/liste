@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
 import { Plus, FolderOpen, Database, Clock, Edit2, Check, X, User } from 'lucide-react';
 import { ProjectSettingsModal } from './ProjectSettingsModal';
+import { AppSettingsMenu } from './ThemeToggle';
 import { Project } from '../types';
 
 interface DashboardProps {
@@ -26,7 +27,6 @@ export function Dashboard({ onOpenAdmin }: DashboardProps) {
       ...data,
       id: `${data.affaireOrigine?.trim()}-${data.ligneOrigine?.trim()}`
     } as Omit<Project, 'createdAt'>;
-    // Trim string values
     const trimmedProject = Object.fromEntries(Object.entries(projectToCreate).map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value])) as Omit<Project, 'createdAt'>;
     await createProjectInteractive(trimmedProject);
     setShowNewProjectModal(false);
@@ -37,27 +37,29 @@ export function Dashboard({ onOpenAdmin }: DashboardProps) {
       <div className="p-4 sm:p-8 pt-12 sm:pt-20 max-w-4xl mx-auto flex flex-col gap-8">
       
       <div className="text-center mb-8 relative">
-         <h1 className="text-4xl font-extrabold text-slate-800 tracking-tight">Gestion d'Affaires</h1>
-         <p className="text-slate-500 mt-2">Ouvrez ou créez une affaire pour gérer sa nomenclature.</p>
-         
-         {onOpenAdmin && isElectron && (
-           <button 
-             onClick={onOpenAdmin}
-             className="absolute top-0 right-0 hidden sm:flex bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 px-4 py-2 rounded-lg font-medium items-center gap-2 shadow-sm transition-all"
-           >
-             <Database className="w-4 h-4" />
-             Catalogue
-           </button>
-         )}
+         <div className="absolute top-0 right-0 hidden sm:flex items-center gap-3">
+           <AppSettingsMenu panelAlign="right" panelSide="below" />
+           {onOpenAdmin && isElectron && (
+             <button 
+               onClick={onOpenAdmin}
+               className="btn-charte btn-charte-secondaire"
+             >
+               <Database className="w-4 h-4" />
+               Catalogue
+             </button>
+           )}
+         </div>
 
-         {/* Editable Tech Name */}
+         <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Gestion d'Affaires</h1>
+         <p className="text-slate-500 dark:text-slate-400 mt-2">Ouvrez ou créez une affaire pour gérer sa nomenclature.</p>
+         
          <div className="mt-6 flex flex-col items-center justify-center">
             {isEditingTech ? (
-              <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-300 shadow-sm animate-in zoom-in-95">
+              <div className="flex items-center gap-2 bg-white dark:bg-charte-tuile-sombre px-3 py-2 rounded-sm border border-slate-200 dark:border-slate-700/50 shadow-sm">
                 <User className="w-4 h-4 text-slate-400" />
                 <input 
                   type="text"
-                  className="w-48 outline-none text-sm font-medium text-slate-700 bg-transparent"
+                  className="w-48 outline-none text-sm font-medium text-slate-700 dark:text-slate-100 bg-transparent"
                   value={tempTechName}
                   onChange={e => setTempTechName(e.target.value)}
                   autoFocus
@@ -74,12 +76,12 @@ export function Dashboard({ onOpenAdmin }: DashboardProps) {
                 <button onClick={() => setIsEditingTech(false)} className="text-red-500 hover:text-red-600 p-1"><X className="w-4 h-4" /></button>
               </div>
             ) : (
-              <div className="flex items-center gap-2 text-sm text-slate-600 font-medium group">
+              <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 font-medium group">
                 <User className="w-4 h-4 text-slate-400" />
                 <span>{defaultTechName}</span>
                 <button 
                   onClick={() => { setTempTechName(defaultTechName); setIsEditingTech(true); }}
-                  className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
+                  className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-sm transition-all"
                   title="Modifier votre nom"
                 >
                   <Edit2 className="w-3.5 h-3.5" />
@@ -89,42 +91,41 @@ export function Dashboard({ onOpenAdmin }: DashboardProps) {
          </div>
       </div>
 
-      {onOpenAdmin && isElectron && (
-        <button 
-          onClick={onOpenAdmin}
-          className="sm:hidden w-full bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:bg-blue-50 px-4 py-3 rounded-lg font-medium flex items-center justify-center gap-2 shadow-sm transition-all mb-4"
-        >
-          <Database className="w-5 h-5" />
-          Administration du Catalogue
-        </button>
-      )}
+      <div className="sm:hidden flex items-center justify-center gap-3 mb-2">
+        <AppSettingsMenu panelAlign="right" panelSide="below" />
+        {onOpenAdmin && isElectron && (
+          <button 
+            onClick={onOpenAdmin}
+            className="flex-1 bg-white dark:bg-charte-tuile-sombre border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 px-4 py-3 rounded-sm font-medium flex items-center justify-center gap-2 shadow-sm"
+          >
+            <Database className="w-5 h-5" />
+            Administration du Catalogue
+          </button>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        
-        {/* Ouvrir une affaire */}
         <button 
           onClick={handleOpenProject}
-          className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 flex flex-col items-center justify-center text-center hover:bg-slate-50 transition-colors group"
+          className="bg-white dark:bg-charte-tuile-sombre p-8 rounded-sm shadow-sm border border-slate-200 dark:border-slate-700/50 flex flex-col items-center justify-center text-center hover:bg-slate-50 dark:hover:bg-[#252627] transition-colors group"
         >
-           <div className="bg-blue-100 p-4 rounded-full text-blue-600 mb-4 group-hover:scale-110 transition-transform">
+           <div className="bg-charte-jaune p-4 rounded-sm text-slate-900 mb-4 group-hover:scale-110 transition-transform">
              <FolderOpen className="w-8 h-8" />
            </div>
-           <h2 className="text-xl font-bold text-slate-800 mb-2">Ouvrir une affaire</h2>
-           <p className="text-sm text-slate-500">Parcourir les fichiers existants</p>
+           <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Ouvrir une affaire</h2>
+           <p className="text-sm text-slate-500 dark:text-slate-400">Parcourir les fichiers existants</p>
         </button>
 
-        {/* Nouvelle affaire */}
         <button 
           onClick={() => setShowNewProjectModal(true)}
-          className="bg-slate-50 hover:bg-slate-100 p-8 rounded-xl border border-slate-200 flex flex-col items-center justify-center text-center transition-colors group shadow-sm"
+          className="bg-white dark:bg-charte-tuile-sombre p-8 rounded-sm border border-slate-200 dark:border-slate-700/50 flex flex-col items-center justify-center text-center transition-colors group shadow-sm hover:bg-slate-50 dark:hover:bg-[#252627]"
         >
-           <div className="bg-slate-200 p-4 rounded-full text-slate-700 mb-4 group-hover:scale-110 transition-transform">
+           <div className="icon-chip p-4 rounded-sm mb-4 group-hover:scale-110 transition-transform">
              <Plus className="w-8 h-8" />
            </div>
-           <h2 className="text-xl font-bold text-slate-800 mb-2">Nouvelle affaire</h2>
-           <p className="text-sm text-slate-500">Créer une nouvelle nomenclature</p>
+           <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Nouvelle affaire</h2>
+           <p className="text-sm text-slate-500 dark:text-slate-400">Créer une nouvelle nomenclature</p>
         </button>
-
       </div>
       
       {showNewProjectModal && (
@@ -134,10 +135,9 @@ export function Dashboard({ onOpenAdmin }: DashboardProps) {
         />
       )}
 
-      {/* Affaires récentes */}
       {recentFiles.length > 0 && (
-        <div className="mt-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-bottom-4">
-          <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+        <div className="mt-2 bg-white dark:bg-charte-tuile-sombre p-6 rounded-sm border border-slate-200 dark:border-slate-700/50 shadow-sm">
+          <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
             <Clock className="w-5 h-5 text-slate-400" />
             Affaires récentes
           </h3>
@@ -154,17 +154,17 @@ export function Dashboard({ onOpenAdmin }: DashboardProps) {
                 }}
                 role="button"
                 tabIndex={0}
-                className="w-full text-left flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-colors group cursor-pointer"
+                className="w-full text-left flex items-center justify-between p-3 rounded-sm hover:bg-slate-50 dark:hover:bg-[#252627] border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-colors group cursor-pointer"
               >
                 <div className="flex items-center gap-4">
-                  <div className="bg-blue-50 p-2 rounded-lg text-blue-600 group-hover:bg-blue-100 transition-colors">
+                  <div className="icon-chip icon-chip-accent p-2 rounded-sm">
                     <FolderOpen className="w-5 h-5" />
                   </div>
                   <div className="truncate">
-                    <h4 className="font-bold text-slate-800 group-hover:text-blue-700 transition-colors">
+                    <h4 className="font-bold text-slate-800 dark:text-slate-100 group-hover:text-slate-900 dark:group-hover:text-charte-jaune transition-colors">
                       {file.nomAffaire ? `${file.nomAffaire} — ${file.nomTableau}` : file.id}
                     </h4>
-                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
                       <span>{file.nomAffaire ? `N° ${file.id} • ` : ''}{file.tech} •</span>
                       <button
                         type="button"
@@ -172,7 +172,7 @@ export function Dashboard({ onOpenAdmin }: DashboardProps) {
                           e.stopPropagation();
                           void window.electronAPI?.showProjectInFolder(file.path);
                         }}
-                        className="inline-flex min-h-8 items-center gap-1 rounded-md px-2 text-blue-600 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                        className="inline-flex min-h-8 items-center gap-1 rounded-sm px-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-charte-bg-sombre hover:text-slate-900 dark:hover:text-white transition-colors"
                         title="Ouvrir l'emplacement du fichier"
                       >
                         <FolderOpen className="w-3.5 h-3.5" />

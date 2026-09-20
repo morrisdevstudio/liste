@@ -154,7 +154,7 @@ export function PlanWindow() {
   }, [state.addReferenceShortcut, state.canAttach]);
 
   return (
-    <div className="h-screen w-full bg-slate-100 flex flex-col font-sans">
+    <div className="h-screen w-full bg-slate-50 dark:bg-charte-bg-sombre flex flex-col font-sans text-slate-900 dark:text-slate-100">
       <header className="bg-white border-b border-slate-200 px-5 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center shrink-0">
@@ -203,7 +203,7 @@ export function PlanWindow() {
               <button
                 type="button"
                 onClick={() => setConfirmAction('delete')}
-                className="px-3 py-1.5 text-xs font-semibold text-red-700 border border-red-200 rounded-md hover:bg-red-50 flex items-center gap-1.5"
+                className="px-3 py-1.5 text-xs font-semibold btn-charte btn-charte-rouge"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 Supprimer
@@ -303,7 +303,7 @@ export function PlanWindow() {
                       type="button"
                       onClick={() => void handleAdd()}
                       disabled={busy || !state.projectPath}
-                      className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
+                      className="btn-charte btn-charte-jaune flex-1 disabled:opacity-50"
                     >
                       <FilePlus className="w-4 h-4" />
                       Ajouter
@@ -312,7 +312,7 @@ export function PlanWindow() {
                       type="button"
                       onClick={() => setShowReuse(true)}
                       disabled={busy || state.reusablePlans.length === 0}
-                      className="flex-1 px-4 py-2.5 bg-white hover:bg-slate-50 disabled:opacity-50 text-slate-700 border border-slate-200 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
+                      className="btn-charte btn-charte-secondaire flex-1 disabled:opacity-50"
                       title={state.reusablePlans.length === 0 ? 'Aucun plan déjà présent dans l’affaire' : 'Réutiliser un plan déjà copié'}
                     >
                       <RefreshCw className="w-4 h-4" />
@@ -354,7 +354,7 @@ export function PlanWindow() {
                   x: state.pendingConfirm!.x,
                   y: state.pendingConfirm!.y,
                 })}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+                className="btn-charte btn-charte-jaune"
               >
                 Confirmer
               </button>
@@ -399,7 +399,7 @@ export function PlanWindow() {
                   const sourcePath = await window.electronAPI?.selectPlanPdf();
                   if (sourcePath) window.electronAPI?.sendPlanAction({ type: 'replace', sourcePath });
                 })()}
-                className={`px-4 py-2 rounded-lg text-sm font-medium text-white ${confirmAction === 'delete' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+                className={`btn-charte ${confirmAction === 'delete' ? 'btn-charte-rouge' : 'btn-charte-jaune'}`}
               >
                 Confirmer
               </button>

@@ -1,7 +1,9 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useStore } from '../store/useStore';
-import { ArrowLeft, Upload, Plus, Download, FileText, Search, Trash2, Minus, ChevronDown, ChevronLeft, ChevronUp, Menu, Settings, Pencil, ArrowUpDown, Calendar, ClipboardList, Sliders, MoreHorizontal, HelpCircle, Keyboard, X, FolderOpen, MapPinned, Lock } from 'lucide-react';
+import { ArrowLeft, Upload, Plus, Download, FileText, Search, Trash2, Minus, ChevronDown, ChevronLeft, ChevronUp, Menu, Pencil, ArrowUpDown, Calendar, ClipboardList, Sliders, MoreHorizontal, HelpCircle, Keyboard, X, FolderOpen, MapPinned, Lock } from 'lucide-react';
 import { ProjectSettingsModal } from './ProjectSettingsModal';
+import { AppSettingsMenu } from './ThemeToggle';
+import { ConfirmDialog } from './ConfirmDialog';
 import { ComponentRef, ListViewPreferences, Project, ShortcutAction } from '../types';
 import * as XLSX from 'xlsx';
 import { ExportService } from '../services/ExportService';
@@ -64,7 +66,7 @@ function EditableQuantity({
     return (
       <div className="flex items-center justify-center gap-1 h-7" title="Quantité verrouillée par le plan">
         <Lock className="w-3.5 h-3.5 text-slate-400" />
-        <div className="px-2 bg-slate-100 text-slate-800 rounded-md min-w-[2.5rem] font-medium text-sm text-center flex items-center justify-center h-7 font-bold">
+        <div className="px-2 bg-slate-100 dark:bg-transparent text-slate-800 rounded-md min-w-[2.5rem] font-medium text-sm text-center flex items-center justify-center h-7 font-bold">
           {value}
         </div>
       </div>
@@ -108,7 +110,7 @@ function EditableQuantity({
       </button>
 
       <div
-        className="px-2 bg-blue-100 text-blue-800 rounded-md min-w-[2.5rem] cursor-pointer hover:bg-blue-200 transition-colors font-medium text-sm text-center flex items-center justify-center h-7 font-bold"
+        className="px-2 bg-slate-100 dark:bg-transparent text-slate-900 rounded-md min-w-[2.5rem] cursor-pointer hover:bg-slate-200 dark:hover:bg-[#252627] transition-colors font-medium text-sm text-center flex items-center justify-center h-7 font-bold"
         onClick={() => { setTempValue(value); setMode('edit-abs'); }}
         title="Modifier la quantité totale"
       >
@@ -193,7 +195,6 @@ export function ProjectView() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const newRefInputRef = useRef<HTMLInputElement>(null);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
-  const displayMenuRef = useRef<HTMLDivElement>(null);
 
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
   const [activeAddQtyLineId, setActiveAddQtyLineId] = useState<string | null>(null);
@@ -202,7 +203,6 @@ export function ProjectView() {
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [capturingShortcut, setCapturingShortcut] = useState<ShortcutAction | null>(null);
   const [shortcutError, setShortcutError] = useState<string | null>(null);
-  const [showDisplayMenu, setShowDisplayMenu] = useState(false);
 
   const [activeView, setActiveView] = useState('Globale');
   const [lastEditableListId, setLastEditableListId] = useState<string | null>(null);
@@ -260,9 +260,6 @@ export function ProjectView() {
       }
       if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target as Node)) {
         setShowActionsMenu(false);
-      }
-      if (displayMenuRef.current && !displayMenuRef.current.contains(event.target as Node)) {
-        setShowDisplayMenu(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -378,7 +375,7 @@ export function ProjectView() {
 
   const handleTriggerDeleteZero = () => {
     if (zeroQtyLinesCount === 0) {
-      alert("Aucune référence avec une quantité de 0 trouvée dans cette liste.");
+      setInfoDialog({ title: 'Aucune ligne à 0', message: 'Aucune référence avec une quantité de 0 trouvée dans cette liste.' });
       return;
     }
     setShowDeleteZeroModal(true);
@@ -698,6 +695,8 @@ export function ProjectView() {
   const [listToDelete, setListToDelete] = useState<{ id: string, name: string } | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [mergeConfirm, setMergeConfirm] = useState<{ fromId: string; toId: string; movingCount: number; survivorQty: number } | null>(null);
+  const [infoDialog, setInfoDialog] = useState<{ title: string; message: string } | null>(null);
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []) as File[];
@@ -760,7 +759,10 @@ export function ProjectView() {
     if (allMappedData.length > 0 && currentProjectId) {
       const result = await importBOMData(currentProjectId, allMappedData);
       if (result.ignored > 0) {
-        alert(`${result.ignored} référence${result.ignored > 1 ? 's' : ''} déjà marquée${result.ignored > 1 ? 's' : ''} sur le plan ${result.ignored > 1 ? 'ont' : 'a'} été ignorée${result.ignored > 1 ? 's' : ''} à l'import.`);
+        setInfoDialog({
+          title: 'Import partiel',
+          message: `${result.ignored} référence${result.ignored > 1 ? 's' : ''} déjà marquée${result.ignored > 1 ? 's' : ''} sur le plan ${result.ignored > 1 ? 'ont' : 'a'} été ignorée${result.ignored > 1 ? 's' : ''} à l'import.`,
+        });
       }
     }
     setShowImportModal(false);
@@ -774,7 +776,7 @@ export function ProjectView() {
       (l) => l.projectId === currentProjectId && l.sublistId === 'Chiffrage'
     );
     if (chiffrageLines.length === 0) {
-      alert("Aucune référence trouvée dans la liste Chiffrage.");
+      setInfoDialog({ title: 'Import Chiffrage', message: 'Aucune référence trouvée dans la liste Chiffrage.' });
       return;
     }
 
@@ -788,7 +790,10 @@ export function ProjectView() {
 
     const result = await importBOMData(currentProjectId, mappedData);
     if (result.ignored > 0) {
-      alert(`${result.ignored} référence${result.ignored > 1 ? 's' : ''} déjà marquée${result.ignored > 1 ? 's' : ''} sur le plan ${result.ignored > 1 ? 'ont' : 'a'} été ignorée${result.ignored > 1 ? 's' : ''} à l'import.`);
+      setInfoDialog({
+        title: 'Import partiel',
+        message: `${result.ignored} référence${result.ignored > 1 ? 's' : ''} déjà marquée${result.ignored > 1 ? 's' : ''} sur le plan ${result.ignored > 1 ? 'ont' : 'a'} été ignorée${result.ignored > 1 ? 's' : ''} à l'import.`,
+      });
     }
   };
 
@@ -997,36 +1002,32 @@ export function ProjectView() {
               <span>Ouvrir l'emplacement</span>
             </button>
           )}
-          <div className="relative w-full" ref={displayMenuRef}>
-            {showDisplayMenu && (
-              <div className="absolute bottom-full left-0 mb-2 w-56 bg-white border border-slate-200 rounded-xl shadow-xl z-30 p-3 space-y-3">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Densité des lignes</p>
-                <div className="space-y-1">
-                  {([
-                    ['comfortable', 'Confort'],
-                    ['compact', 'Compact'],
-                    ['dense', 'Très compact'],
-                  ] as const).map(([density, label]) => (
-                    <button
-                      key={density}
-                      onClick={() => updateListViewPreferences({ density })}
-                      className={`w-full rounded-md px-2 py-1.5 text-left text-sm ${listViewPreferences.density === density ? 'bg-blue-50 font-medium text-blue-700' : 'text-slate-700 hover:bg-slate-50'}`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+          <AppSettingsMenu
+            showLabel={isSidebarOpen}
+            panelAlign="left"
+            panelSide="above"
+            buttonClassName={`w-full px-3 py-2 rounded-md text-sm font-medium hover:bg-slate-100 dark:hover:bg-[#252627] flex items-center gap-2 transition-colors text-slate-600 dark:text-slate-300 ${isSidebarOpen ? '' : 'w-10 justify-center px-0'}`}
+          >
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Densité des lignes</p>
+              <div className="space-y-1">
+                {([
+                  ['comfortable', 'Confort'],
+                  ['compact', 'Compact'],
+                  ['dense', 'Très compact'],
+                ] as const).map(([density, label]) => (
+                  <button
+                    key={density}
+                    type="button"
+                    onClick={() => updateListViewPreferences({ density })}
+                    className={`w-full rounded-sm px-2 py-1.5 text-left text-sm ${listViewPreferences.density === density ? 'bg-slate-100 dark:bg-charte-bg-sombre font-medium text-slate-900 dark:text-charte-jaune' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-[#252627]'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
-            )}
-            <button
-              onClick={() => setShowDisplayMenu(!showDisplayMenu)}
-              className={`w-full px-3 py-2 rounded-md text-sm font-medium hover:bg-slate-100 flex items-center gap-2 transition-colors text-slate-600 ${isSidebarOpen ? '' : 'w-10 justify-center px-0'}`}
-              title="Paramètres de l'application"
-            >
-              <Settings className="w-4 h-4 shrink-0" />
-              {isSidebarOpen && <span>Paramètres</span>}
-            </button>
-          </div>
+            </div>
+          </AppSettingsMenu>
           <button
             onClick={() => {
               setShortcutError(null);
@@ -1059,7 +1060,7 @@ export function ProjectView() {
             <button
               type="button"
               onClick={() => { void window.electronAPI?.openPlanWindow(); }}
-              className="px-2.5 h-7 text-blue-700 hover:bg-blue-50 rounded-md text-sm font-medium flex items-center gap-1.5"
+              className="btn-charte btn-charte-jaune h-7 px-2.5 text-xs"
               title="Ouvrir la fenêtre Plan"
             >
               <MapPinned className="w-4 h-4" />
@@ -1162,7 +1163,7 @@ export function ProjectView() {
             <button
               type="button"
               onClick={() => { void window.electronAPI?.openPlanWindow(); }}
-              className="px-4 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-sm font-medium hover:bg-blue-100 flex items-center gap-2 transition-colors"
+              className="btn-charte btn-charte-jaune"
               title="Ouvrir la fenêtre Plan"
             >
               <MapPinned className="w-4 h-4" />
@@ -1173,7 +1174,7 @@ export function ProjectView() {
                 const subName = activeView === 'Globale' ? 'Liste globale' : activeView === 'EtatPrepa' ? 'État préparatoire' : activeView === 'Chiffrage' ? 'Chiffrage' : projectSublists.find(s => s.id === activeView)?.name || 'Vue';
                 ExportService.exportToPDF(project, viewLines, subName, currentProjectPath);
               }}
-              className="px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-md text-sm font-medium hover:bg-red-100 flex items-center gap-2 transition-colors"
+              className="btn-charte btn-charte-bleu"
             >
               <FileText className="w-4 h-4" />
               PDF
@@ -1183,7 +1184,7 @@ export function ProjectView() {
                 const subName = activeView === 'Globale' ? 'Liste globale' : activeView === 'EtatPrepa' ? 'État préparatoire' : activeView === 'Chiffrage' ? 'Chiffrage' : projectSublists.find(s => s.id === activeView)?.name || 'Vue';
                 ExportService.exportToExcel(project, viewLines, subName, currentProjectPath);
               }}
-              className="px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md text-sm font-medium hover:bg-emerald-100 flex items-center gap-2 transition-colors"
+              className="btn-charte btn-charte-vert"
             >
               <Download className="w-4 h-4" />
               Excel
@@ -1485,10 +1486,10 @@ export function ProjectView() {
                         onClick={() => setSelectedLineId(line.id)}
                         className={`transition-colors group cursor-pointer ${
                           isSelected
-                            ? 'bg-blue-100/90 ring-2 ring-inset ring-blue-500 text-slate-900'
+                            ? 'ui-row-selected text-slate-900'
                             : isFullyOrdered
-                              ? 'bg-slate-100/70 text-slate-900 hover:bg-slate-100'
-                              : 'hover:bg-slate-100/50 text-slate-900'
+                              ? 'bg-slate-100/70 text-slate-900 hover:bg-slate-100 dark:hover:bg-[#303133]'
+                              : 'hover:bg-slate-100/50 text-slate-900 dark:hover:bg-[#303133]'
                         }`}
                       >
                         {columns.ref.visible && (
@@ -1501,10 +1502,7 @@ export function ProjectView() {
                                 onSave={async (newRef) => {
                                   const result = await updateBOMLineRef(line.id, newRef);
                                   if (result && result.needsConfirm) {
-                                    const ok = window.confirm(
-                                      `La référence cible a déjà une quantité de ${result.needsConfirm.survivorQty}. Confirmer la fusion transférera ${result.needsConfirm.movingCount} pastille${result.needsConfirm.movingCount > 1 ? 's' : ''} et passera la quantité sous contrôle du plan.`
-                                    );
-                                    if (ok) await confirmMergeBOMLine(result.needsConfirm.fromId, result.needsConfirm.toId);
+                                    setMergeConfirm(result.needsConfirm);
                                   }
                                 }}
                               />
@@ -1517,7 +1515,7 @@ export function ProjectView() {
                           </td>
                         )}
                         {columns.quantity.visible && (
-                          <td className={`px-6 py-2.5 whitespace-nowrap text-sm text-center font-medium ${isSelected ? 'bg-transparent text-slate-900' : isFullyOrdered ? 'bg-blue-50/10 text-slate-900' : 'bg-blue-50/50 text-slate-900'}`} style={{ width: columns.quantity.width, minWidth: columns.quantity.width, maxWidth: columns.quantity.width }}>
+                          <td className={`px-6 py-2.5 whitespace-nowrap text-sm text-center font-medium ${isSelected ? 'bg-transparent text-slate-900' : 'bg-[#f8fafc] text-slate-900 dark:bg-transparent'}`} style={{ width: columns.quantity.width, minWidth: columns.quantity.width, maxWidth: columns.quantity.width }}>
                             {activeView === 'Globale' || activeView === 'EtatPrepa' || activeView === 'Chiffrage' ? (
                               line.quantity
                             ) : (
@@ -1834,7 +1832,7 @@ export function ProjectView() {
                   </button>
                   <button
                     onClick={confirmImport}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
+                    className="btn-charte btn-charte-jaune"
                   >
                     Importer via cette configuration
                   </button>
@@ -1872,7 +1870,7 @@ export function ProjectView() {
                           e.preventDefault();
                           const trimmedName = addListModal.name.trim();
                           if (addListModal.type === 'appro_anticipe' && trimmedName.toLowerCase() === 'liste achat') {
-                            alert("Cette liste existe déjà par défaut.");
+                            setInfoDialog({ title: 'Liste existante', message: 'Cette liste existe déjà par défaut.' });
                             return;
                           }
                           addSublist({ projectId: currentProjectId!, name: trimmedName, type: addListModal.type });
@@ -1894,7 +1892,7 @@ export function ProjectView() {
                       const trimmedName = addListModal.name.trim();
                       if (trimmedName) {
                         if (addListModal.type === 'appro_anticipe' && trimmedName.toLowerCase() === 'liste achat') {
-                          alert("Cette liste existe déjà par défaut.");
+                          setInfoDialog({ title: 'Liste existante', message: 'Cette liste existe déjà par défaut.' });
                           return;
                         }
                         addSublist({ projectId: currentProjectId!, name: trimmedName, type: addListModal.type });
@@ -1902,7 +1900,7 @@ export function ProjectView() {
                       }
                     }}
                     disabled={!addListModal.name.trim()}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium shadow-sm transition-colors disabled:opacity-50"
+                    className="btn-charte btn-charte-jaune disabled:opacity-50"
                   >
                     Créer
                   </button>
@@ -1936,7 +1934,7 @@ export function ProjectView() {
                       if (activeView === listToDelete.id) selectView('Globale');
                       setListToDelete(null);
                     }}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm transition-colors shadow-sm"
+                    className="btn-charte btn-charte-rouge"
                   >
                     Supprimer
                   </button>
@@ -1975,7 +1973,7 @@ export function ProjectView() {
                       }
                       setShowDeleteZeroModal(false);
                     }}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm transition-colors shadow-sm"
+                    className="btn-charte btn-charte-rouge"
                   >
                     Supprimer ({zeroQtyLinesCount})
                   </button>
@@ -2050,7 +2048,7 @@ export function ProjectView() {
                       setCapturingShortcut(null);
                       setShowShortcutsModal(false);
                     }}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors"
+                    className="btn-charte btn-charte-bleu"
                   >
                     Fermer
                   </button>
@@ -2069,6 +2067,29 @@ export function ProjectView() {
           onSave={handleUpdateSettings}
         />
       )}
+      <ConfirmDialog
+        open={!!mergeConfirm}
+        title="Fusionner les références ?"
+        message={mergeConfirm
+          ? `La référence cible a déjà une quantité de ${mergeConfirm.survivorQty}. Confirmer la fusion transférera ${mergeConfirm.movingCount} pastille${mergeConfirm.movingCount > 1 ? 's' : ''} et passera la quantité sous contrôle du plan.`
+          : null}
+        onCancel={() => setMergeConfirm(null)}
+        onConfirm={() => {
+          if (!mergeConfirm) return;
+          const pending = mergeConfirm;
+          setMergeConfirm(null);
+          void confirmMergeBOMLine(pending.fromId, pending.toId);
+        }}
+      />
+      <ConfirmDialog
+        open={!!infoDialog}
+        title={infoDialog?.title || ''}
+        message={infoDialog?.message || ''}
+        confirmLabel="OK"
+        hideCancel
+        onCancel={() => setInfoDialog(null)}
+        onConfirm={() => setInfoDialog(null)}
+      />
       <datalist id="all-refs-list">
         {suggestedRefs.map(r => <option key={r.ref} value={r.ref}>{r.designation}</option>)}
       </datalist>

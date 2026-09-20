@@ -73,15 +73,15 @@ export function UpdateNotifier() {
   }
 
   return (
-    <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg relative z-50 shrink-0 border-b border-indigo-800">
+    <div className="bg-charte-tuile-sombre text-slate-100 shadow-sm relative z-50 shrink-0 border-b border-slate-700/50">
       <div className="max-w-7xl mx-auto px-4 py-3 sm:px-6 lg:px-8 flex items-center justify-between flex-wrap gap-4">
         
         <div className="flex items-center flex-1 min-w-0 gap-3">
-          <span className="flex p-2 rounded-lg bg-indigo-800/80 shrink-0 animate-bounce">
+          <span className="flex p-2 rounded-sm bg-charte-jaune text-slate-900 shrink-0">
             {status === 'downloaded' ? (
-              <CheckCircle2 className="h-5 w-5 text-emerald-400" aria-hidden="true" />
+              <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
             ) : (
-              <Sparkles className="h-5 w-5 text-yellow-300" aria-hidden="true" />
+              <Sparkles className="h-5 w-5" aria-hidden="true" />
             )}
           </span>
           <div className="min-w-0 flex-1">
@@ -89,26 +89,26 @@ export function UpdateNotifier() {
               <span>Mise à jour v{releaseInfo?.version || '...'}</span>
               
               {status === 'downloading' && (
-                <span className="text-xs bg-blue-500/50 px-2 py-0.5 rounded font-normal animate-pulse">
+                <span className="text-xs bg-slate-700 px-2 py-0.5 rounded-sm font-normal animate-pulse">
                   Téléchargement en cours...
                 </span>
               )}
               {status === 'downloaded' && (
-                <span className="text-xs bg-emerald-500 px-2 py-0.5 rounded font-bold">
+                <span className="text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-sm font-bold">
                   Prête à installer
                 </span>
               )}
             </p>
             
             {status === 'downloading' ? (
-              <div className="mt-1.5 w-full max-w-md bg-indigo-900/50 rounded-full h-1.5 overflow-hidden">
+              <div className="mt-1.5 w-full max-w-md bg-slate-800 rounded-sm h-1.5 overflow-hidden">
                 <div 
-                  className="bg-yellow-400 h-1.5 rounded-full transition-all duration-300 ease-out" 
+                  className="bg-charte-jaune h-1.5 transition-all duration-300 ease-out" 
                   style={{ width: `${Math.round(progress)}%` }}
                 />
               </div>
             ) : (
-              <p className="text-xs text-indigo-100 line-clamp-1 mt-0.5">
+              <p className="text-xs text-slate-400 line-clamp-1 mt-0.5">
                 La toute dernière version a été téléchargée en arrière-plan. Redémarrez l'application pour l'appliquer.
               </p>
             )}
@@ -117,7 +117,7 @@ export function UpdateNotifier() {
 
         <div className="flex items-center gap-3 shrink-0">
           {status === 'downloading' && (
-            <div className="text-xs font-bold text-indigo-200 tabular-nums">
+            <div className="text-xs font-bold text-slate-300 tabular-nums">
               {Math.round(progress)}%
             </div>
           )}
@@ -125,7 +125,7 @@ export function UpdateNotifier() {
           {status === 'downloaded' && (
             <button
               onClick={handleRestart}
-              className="flex items-center justify-center px-4 py-1.5 border border-transparent rounded-md shadow-sm text-xs font-extrabold text-indigo-700 bg-white hover:bg-indigo-50 transition-all flex-row gap-1.5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-indigo-700 focus:ring-white"
+              className="flex items-center justify-center px-4 py-1.5 rounded-sm shadow-sm text-xs font-bold text-slate-900 bg-charte-jaune hover:bg-charte-jaune-hover transition-colors flex-row gap-1.5"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               Redémarrer et Installer
@@ -135,7 +135,7 @@ export function UpdateNotifier() {
           <button
             type="button"
             onClick={handleDismiss}
-            className="p-1.5 rounded-md hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-white transition-colors"
+            className="p-1.5 rounded-sm hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
             title="Masquer"
           >
             <X className="h-4 w-4" aria-hidden="true" />

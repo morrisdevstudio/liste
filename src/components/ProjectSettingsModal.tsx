@@ -60,7 +60,7 @@ export function ProjectSettingsModal({ initialData, isEditMode = false, onClose,
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white dark:bg-charte-tuile-sombre rounded-sm shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-slate-200 dark:border-slate-700/50">
         <div className="p-6 border-b border-slate-200 flex items-center justify-between">
           <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
             {isEditMode ? <Save className="w-5 h-5 text-slate-500" /> : <Plus className="w-5 h-5 text-slate-500" />}
@@ -84,7 +84,7 @@ export function ProjectSettingsModal({ initialData, isEditMode = false, onClose,
                    <input 
                      required
                      type="text" 
-                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 transition-shadow bg-white text-sm"
+                     className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-sm focus:outline-none focus:border-charte-jaune transition-shadow bg-white dark:bg-[#252627] text-sm text-slate-800 dark:text-white"
                      value={formData.nomAffaire}
                      onChange={e => handleChange('nomAffaire', e.target.value)}
                    />
@@ -94,7 +94,7 @@ export function ProjectSettingsModal({ initialData, isEditMode = false, onClose,
                    <input 
                      required
                      type="text" 
-                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 transition-shadow bg-white text-sm"
+                     className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-sm focus:outline-none focus:border-charte-jaune transition-shadow bg-white dark:bg-[#252627] text-sm text-slate-800 dark:text-white"
                      value={formData.client}
                      onChange={e => handleChange('client', e.target.value)}
                    />
@@ -106,7 +106,7 @@ export function ProjectSettingsModal({ initialData, isEditMode = false, onClose,
                    <input 
                      required
                      type="text" 
-                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 transition-shadow bg-white text-sm"
+                     className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-sm focus:outline-none focus:border-charte-jaune transition-shadow bg-white dark:bg-[#252627] text-sm text-slate-800 dark:text-white"
                      value={formData.nomTableau}
                      onChange={e => handleChange('nomTableau', e.target.value)}
                    />
@@ -117,7 +117,7 @@ export function ProjectSettingsModal({ initialData, isEditMode = false, onClose,
                    <label className="block text-sm font-medium text-slate-700 mb-1">Filiale d'origine *</label>
                    <select 
                      required
-                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 transition-shadow bg-white text-sm"
+                     className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-sm focus:outline-none focus:border-charte-jaune transition-shadow bg-white dark:bg-[#252627] text-sm text-slate-800 dark:text-white"
                      value={formData.filialeOrigine}
                      onChange={e => handleChange('filialeOrigine', e.target.value)}
                    >
@@ -134,7 +134,7 @@ export function ProjectSettingsModal({ initialData, isEditMode = false, onClose,
                    <input 
                      required
                      type="text" 
-                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 transition-shadow bg-white text-sm"
+                     className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-sm focus:outline-none focus:border-charte-jaune transition-shadow bg-white dark:bg-[#252627] text-sm text-slate-800 dark:text-white"
                      value={formData.affaireOrigine}
                      onChange={e => handleChange('affaireOrigine', e.target.value)}
                    />
@@ -144,7 +144,7 @@ export function ProjectSettingsModal({ initialData, isEditMode = false, onClose,
                    <input 
                      required
                      type="text" 
-                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 transition-shadow bg-white text-sm"
+                     className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-sm focus:outline-none focus:border-charte-jaune transition-shadow bg-white dark:bg-[#252627] text-sm text-slate-800 dark:text-white"
                      value={formData.ligneOrigine}
                      onChange={e => handleChange('ligneOrigine', e.target.value)}
                    />
@@ -169,7 +169,7 @@ export function ProjectSettingsModal({ initialData, isEditMode = false, onClose,
                      <div className="md:col-span-2 mt-2 pt-2 border-t border-slate-100">
                        <label className="block text-sm font-medium text-slate-700 mb-1">Filiale Exécutant (optionnel)</label>
                        <select 
-                         className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 transition-shadow bg-white text-sm"
+                         className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-sm focus:outline-none focus:border-charte-jaune transition-shadow bg-white dark:bg-[#252627] text-sm text-slate-800 dark:text-white"
                          value={formData.filialeExecutant}
                          onChange={e => handleChange('filialeExecutant', e.target.value)}
                        >
@@ -185,7 +185,7 @@ export function ProjectSettingsModal({ initialData, isEditMode = false, onClose,
                        <label className="block text-sm font-medium text-slate-700 mb-1">N° affaire Exécutant (optionnel)</label>
                        <input 
                          type="text" 
-                         className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 transition-shadow bg-white text-sm"
+                         className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-sm focus:outline-none focus:border-charte-jaune transition-shadow bg-white dark:bg-[#252627] text-sm text-slate-800 dark:text-white"
                          value={formData.affaireExecutant}
                          onChange={e => handleChange('affaireExecutant', e.target.value)}
                        />
@@ -194,7 +194,7 @@ export function ProjectSettingsModal({ initialData, isEditMode = false, onClose,
                        <label className="block text-sm font-medium text-slate-700 mb-1">Ligne Exécutant (optionnel)</label>
                        <input 
                          type="text" 
-                         className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 transition-shadow bg-white text-sm"
+                         className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-sm focus:outline-none focus:border-charte-jaune transition-shadow bg-white dark:bg-[#252627] text-sm text-slate-800 dark:text-white"
                          value={formData.ligneExecutant}
                          onChange={e => handleChange('ligneExecutant', e.target.value)}
                        />
@@ -222,7 +222,7 @@ export function ProjectSettingsModal({ initialData, isEditMode = false, onClose,
                        <label className="block text-sm font-medium text-slate-700 mb-1">N° affaire UF (optionnel)</label>
                        <input 
                          type="text" 
-                         className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 transition-shadow bg-white text-sm"
+                         className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-sm focus:outline-none focus:border-charte-jaune transition-shadow bg-white dark:bg-[#252627] text-sm text-slate-800 dark:text-white"
                          value={formData.affaireUF}
                          onChange={e => handleChange('affaireUF', e.target.value)}
                        />
@@ -231,7 +231,7 @@ export function ProjectSettingsModal({ initialData, isEditMode = false, onClose,
                        <label className="block text-sm font-medium text-slate-700 mb-1">Ligne UF (optionnel)</label>
                        <input 
                          type="text" 
-                         className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 transition-shadow bg-white text-sm"
+                         className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-sm focus:outline-none focus:border-charte-jaune transition-shadow bg-white dark:bg-[#252627] text-sm text-slate-800 dark:text-white"
                          value={formData.ligneUF}
                          onChange={e => handleChange('ligneUF', e.target.value)}
                        />
@@ -244,7 +244,7 @@ export function ProjectSettingsModal({ initialData, isEditMode = false, onClose,
                    <label className="block text-sm font-medium text-slate-700 mb-1">Chargé d'affaire *</label>
                    <select 
                      required
-                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 transition-shadow bg-white text-sm disabled:opacity-50"
+                     className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-sm focus:outline-none focus:border-charte-jaune transition-shadow bg-white dark:bg-[#252627] text-sm text-slate-800 dark:text-white disabled:opacity-50"
                      value={formData.chargeAffaire}
                      onChange={e => handleChange('chargeAffaire', e.target.value)}
                      disabled={!formData.filialeOrigine}
@@ -267,7 +267,7 @@ export function ProjectSettingsModal({ initialData, isEditMode = false, onClose,
                    <input 
                      required
                      type="text" 
-                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 transition-shadow bg-white text-sm"
+                     className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-sm focus:outline-none focus:border-charte-jaune transition-shadow bg-white dark:bg-[#252627] text-sm text-slate-800 dark:text-white"
                      value={formData.techName}
                      onChange={e => handleChange('techName', e.target.value)}
                    />
@@ -275,18 +275,18 @@ export function ProjectSettingsModal({ initialData, isEditMode = false, onClose,
              </div>
           </form>
         </div>
-        <div className="p-6 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-3">
+        <div className="p-6 border-t border-slate-200 dark:border-slate-700/50 bg-slate-50 dark:bg-[#18191a] flex items-center justify-end gap-3">
           <button 
             type="button"
             onClick={onClose}
-            className="px-4 py-2 border border-slate-300 rounded-lg font-medium text-slate-700 hover:bg-white transition-colors"
+            className="btn-charte btn-charte-secondaire"
           >
             Annuler
           </button>
           <button 
             type="submit"
             form="project-settings-form"
-            className="bg-slate-700 hover:bg-slate-800 text-white px-6 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors shadow-md"
+            className="btn-charte btn-charte-jaune"
           >
             {isEditMode ? <Save className="w-4 h-4" /> : <FolderOpen className="w-4 h-4" />}
             {isEditMode ? "Enregistrer" : "Créer et choisir l'emplacement..."}

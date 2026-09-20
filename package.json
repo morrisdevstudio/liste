@@ -59,6 +59,7 @@
     "files": [
       "dist/**",
       "dist-electron/**",
+      "public/icon.ico",
       "!**/*.ts",
       "!**/*.tsx",
       "!db/**",

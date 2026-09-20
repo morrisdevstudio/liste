@@ -518,7 +518,7 @@ export function PlanPdfViewer({
         )}
         <canvas
           ref={canvasRef}
-          className="absolute shadow-lg bg-white"
+          className="absolute shadow-lg plan-paper"
           style={{
             left: pan.x,
             top: pan.y,

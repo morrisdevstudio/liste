@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -11,8 +11,42 @@ import { DEFAULT_COMPONENT_TYPES, isNeutralColor, normalizeHexColor } from '../s
 
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
 
+function configPath() {
+  return path.join(app.getPath('userData'), 'config.json');
+}
+
+function readAppConfig(): AppConfig {
+  const filePath = configPath();
+  if (!fs.existsSync(filePath)) return {};
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as AppConfig;
+  } catch {
+    return {};
+  }
+}
+
+function applyNativeTheme(theme?: AppConfig['theme']) {
+  nativeTheme.themeSource = theme === 'light' || theme === 'dark' ? theme : 'system';
+}
+
+function broadcastTheme(theme: AppConfig['theme']) {
+  if (!theme) return;
+  applyNativeTheme(theme);
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send('theme-changed', theme);
+  }
+}
+
 const _filename = fileURLToPath(import.meta.url);
 const _dirname = path.dirname(_filename);
+
+function appIconPath() {
+  const candidates = [
+    path.join(_dirname, '../public/icon.ico'),
+    path.join(_dirname, '../dist/icon.ico'),
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate));
+}
 
 function parseTypeId(value: unknown): number | null {
   if (value === null || value === undefined || value === '') return null;
@@ -216,13 +250,14 @@ function createPlanWindow() {
     title: 'Plan',
     width: 1100,
     height: 800,
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#131314' : '#f8fafc',
     webPreferences: {
       preload: path.join(_dirname, 'preload.mjs'),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
     },
-    icon: path.join(_dirname, '../public/icon.ico'),
+    icon: appIconPath(),
   });
 
   planWindow.setMenu(null);
@@ -290,13 +325,14 @@ function createWindow() {
     title: 'Liste BOM',
     width: 1200,
     height: 800,
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#131314' : '#f8fafc',
     webPreferences: {
       preload: path.join(_dirname, 'preload.mjs'),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
     },
-    icon: path.join(_dirname, '../public/icon.ico'),
+    icon: appIconPath(),
   });
 
   mainWindow.setMenu(null);
@@ -317,6 +353,7 @@ ipcMain.handle('take-startup-project-file', () => {
 });
 
 app.whenReady().then(() => {
+  applyNativeTheme(readAppConfig().theme);
   createWindow();
 
   app.on('activate', () => {
@@ -607,22 +644,16 @@ ipcMain.handle('export-pdf-auto', async (_event, listFilePath: string, filename:
 });
 
 ipcMain.handle('save-config', async (_event, config: Partial<AppConfig>) => {
-  const configPath = path.join(app.getPath('userData'), 'config.json');
-  let existing: AppConfig = {};
-  if (fs.existsSync(configPath)) {
-    existing = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as AppConfig;
-  }
+  const existing = readAppConfig();
   const updated = { ...existing, ...config };
-  fs.writeFileSync(configPath, JSON.stringify(updated, null, 2));
+  fs.writeFileSync(configPath(), JSON.stringify(updated, null, 2));
   if (config.dbFilePath) getDb(config.dbFilePath);
+  if (config.theme) broadcastTheme(config.theme);
 });
 
 ipcMain.handle('load-config', async () => {
-  const configPath = path.join(app.getPath('userData'), 'config.json');
-  if (fs.existsSync(configPath)) {
-    return JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-  }
-  return null;
+  const config = readAppConfig();
+  return Object.keys(config).length > 0 ? config : null;
 });
 
 ipcMain.handle('verify-admin-password', async (_event, password: string) => {
@@ -869,6 +900,25 @@ ipcMain.handle('update-reference', async (_event, oldRef: string, data: Componen
     const stmt = getDb().prepare('UPDATE references_data SET ref = ?, designation = ?, fabCode = ?, weight = ?, typeId = ? WHERE ref = ?');
     stmt.run(data.ref, data.designation, data.fabCode, data.weight || null, typeId, oldRef);
     return { success: true };
+  } catch (error) {
+    return { success: false, error: errorMessage(error) };
+  }
+});
+
+ipcMain.handle('assign-reference-type', async (_event, refs: string[], typeId: number) => {
+  try {
+    const uniqueRefs = [...new Set(refs.filter((ref) => typeof ref === 'string' && ref.trim() !== ''))];
+    if (uniqueRefs.length === 0) throw new Error('Aucune référence sélectionnée.');
+
+    const validTypeId = assertTypeExists(parseTypeId(typeId));
+    const database = getDb();
+    const update = database.prepare('UPDATE references_data SET typeId = ? WHERE ref = ?');
+    const transaction = database.transaction(() => {
+      for (const ref of uniqueRefs) update.run(validTypeId, ref);
+    });
+    transaction();
+
+    return { success: true, updated: uniqueRefs.length };
   } catch (error) {
     return { success: false, error: errorMessage(error) };
   }

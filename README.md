@@ -1,100 +1,138 @@
-# 📋 Gestionnaire de Nomenclatures Électriques & Approvisionnements (BOM)
+# 📋 Liste
 
-Une application desktop professionnelle, moderne et fluide développée en **React / TypeScript / Electron / SQLite**, conçue pour simplifier la gestion, la consolidation, le tri et l'exportation des listes de matériel (BOM - Bill of Materials) et le suivi des approvisionnements sur les affaires industrielles.
+## Le gestionnaire de nomenclatures et d’approvisionnements pour les affaires industrielles
 
----
+**Liste** aide les bureaux d’études à transformer des nomenclatures de matériel en listes claires, consolidées et directement exploitables par les équipes achats et les ateliers.
 
-## 🌟 Fonctionnalités Clés
-
-### 1. Multi-vues Intelligentes & Consolidation Automatique
-* **Vue Globale :** Consolidation automatique de toutes les listes du projet. Les doublons de références sont agrégés avec somme automatique des quantités pour une vision globale de l'affaire.
-* **Vues Métier Spécialisées :** Répartition automatique du matériel dans des vues dédiées (`Tôlerie`, `Électronique`, `Canevas`, `U.F.`, `Autre`) pour simplifier le travail des différents ateliers.
-* **Appro Anticipé & Fiche Achat :** Gestion et isolation des pièces commandées par anticipation et des achats standard.
-
-### 2. État Préparatoire Dynamique & Suivi des Commandes
-* **Calcul des Restes à Commander :** L'onglet **État préparatoire** identifie automatiquement les pièces déjà commandées en additionnant et en comparant le contenu de la "Liste achat" avec les autres listes d'approvisionnement anticipé.
-* **Indicateurs de Statut Visuels en Temps Réel :**
-  * `À commander` : Aucune quantité commandée pour cette référence.
-  * `[X] Commandé` : Quantité commandée partielle (X).
-  * `Commandé` : Quantité totalement approvisionnée.
-* **Aide Visuelle Ergonomique :** Le fond des lignes intégralement commandées (`Commandé`) se grise automatiquement de manière subtile, tout en préservant la couleur de texte noire pour une lisibilité et un confort visuel optimaux.
-
-### 3. Système de Tri Avancé (Tri Naturel Intelligent)
-L'application intègre un moteur de tri ultra-précis conçu pour le matériel industriel, proposant 3 modes sélectionnables via des boutons ergonomiques (style contrôle segmenté premium) à gauche du champ de recherche :
-1. **Tri Réf / Fab (Par défaut) :** Regroupe les pièces par **Code Fabricant**, puis les trie par **Référence** de manière naturelle.
-2. **Tri Date d'ajout :** Trie les références selon leur **ordre chronologique d'ajout** dans le projet (les plus anciennes d'abord).
-3. **Tri Statut (Exclusif à la vue État Préparatoire) :** Regroupe les lignes par ordre d'urgence opérationnelle :
-   * `À commander` en premier (haut de la liste).
-   * `Partiel` au milieu.
-   * `Commandé` tout en bas (grisé).
-   * *Tri secondaire automatique :* Les lignes ayant le même statut sont automatiquement ordonnées par **Code Fabricant** puis par **Référence**.
-* **Algorithme de Tri Naturel :** Contrairement au tri informatique standard, l'application comprend la logique humaine des références complexes (ex: `750-8` est correctement classé **avant** `750-10`, et `000-2` est classé **avant** `000-100`).
-
-### 4. Import Excel Intelligent & Flexible
-* **Mapping Personnalisable :** Module d'importation robuste avec configuration visuelle des colonnes (Référence, Quantité, Localisation/Tableau).
-* **Non Destructif :** Fusion automatique intelligente et incrémentation des quantités pour les références déjà existantes.
-
-### 5. Exports Premium & Normalisés
-L'application génère des exports haut de gamme indispensables pour la transmission aux services Achats ou aux clients.
-* **Export PDF (jsPDF & AutoTable) :**
-  * **Design d'excellence :** Cartouche de titre jaune vif contrasté avec bordures noires fines, reprenant l'ensemble des données d'affaire.
-  * **Optimisation de l'espace :** Marges réduites de 1/3 (passant de 14mm à 9,33mm) pour maximiser le nombre de lignes par page et réduire la gâche papier.
-  * **Rendu de Statut Épuré :** Quantités affichées sous forme d'**entiers** simples et nets (ex: `5` et `2 Commandé`).
-  * **Numérotation Précise :** Numérotation au format `Page Actuelle / Total Pages` (ex: `3/5`) rigoureusement alignée à droite dans le pied de page, sur la même ligne que le sous-titre de l'affaire.
-  * **Préservation Visuelle :** Les lignes totalement commandées apparaissent avec un fond grisé identique à l'application.
-* **Export Excel (.xls) :**
-  * Exportation brute pour traitement ultérieur par les ERP ou acheteurs.
-  * Préserve la quantité globale pour ne pas être impacté par les statuts de préparation.
-* **Tri de Livraison Systématique :** Peu importe le tri affiché à l'écran, **les fichiers générés (PDF & Excel) sont systématiquement et rigoureusement triés selon la hiérarchie logique `Code Fabricant` ➔ `Référence` (Tri Naturel)** pour garantir une structure de livraison parfaite.
-
-### 6. Gestion Rigoureuse des Données d'Affaires
-* **Nommage Automatique Normalisé :** Tous les fichiers générés prennent automatiquement la structure réglementaire :
-  `"n°origine n°ligneOrigine NomListe NomTableau - NomAffaire (Client)"`
-  *(Exemple : `12345 10 Liste achat Tableau Général - Affaire Rénovation (Client EDF).pdf`)*
-* **Architecture Electron + SQLite :** Base de données SQLite locale ultra-rapide avec recherche de références en autocomplétion floue en temps réel.
-* **Persistance Stable :** Suivi des fichiers de projets récents et sauvegarde continue.
-
-### 7. Mises à jour Transparentes Intégrées (Auto-Update)
-* **Téléchargement invisible :** À chaque lancement, l'application interroge les serveurs GitHub (`morrisdevstudio/liste`). Si une mise à jour est trouvée, elle la télécharge silencieusement en arrière-plan sans interrompre le travail de l'utilisateur.
-* **Interface fluide et premium :** Pendant le téléchargement, un élégant bandeau avec barre de progression dynamique s'affiche au sommet de l'écran.
-* **Installation sans friction :** Une fois la mise à jour téléchargée et prête, l'application propose un simple bouton "Redémarrer et Installer". Un clic suffit pour écraser l'ancienne version, tout en conservant 100% des données et paramètres de l'utilisateur.
-* **Mémoire de session :** Le bandeau peut être fermé temporairement ; l'application n'embêtera plus l'utilisateur pendant sa session active.
+Depuis une même affaire, l’application centralise les références, les quantités, les besoins d’achat, les commandes déjà passées et les plans associés. L’objectif : savoir rapidement ce qu’il faut commander, pour quelle liste et dans quelle quantité.
 
 ---
 
-## 🛠️ Stack Technique
+## Gérer une affaire de A à Z
 
-* **Frontend :** React 18, TypeScript, Tailwind CSS, Lucide React (Icônes)
-* **Shell Desktop & Données :** Electron, SQLite, IPC (Inter-Process Communication) sécurisé
-* **Gestion d'État :** Zustand
-* **Exports :** jsPDF, jsPDF-AutoTable, XLSX (SheetJS)
+- Créer une nouvelle affaire avec ses informations d’identification.
+- Ouvrir une affaire existante ou retrouver rapidement les affaires récemment utilisées.
+- Conserver les listes, les réglages et les documents associés dans le dossier de l’affaire.
+- Modifier les paramètres de l’affaire au fil de son avancement.
+- Ouvrir directement l’emplacement de l’affaire depuis l’application.
 
 ---
 
-## 🚀 Installation & Lancement en Développement
+## Organiser les listes de matériel
 
-### Prérequis
-* Node.js (version 16 ou supérieure)
-* npm (installé par défaut avec Node)
+Chaque affaire peut réunir plusieurs listes destinées à des usages différents :
 
-### Instructions
+- **Liste globale** : une vision consolidée de toutes les références de l’affaire.
+- **Fiches achat / reprise** : des listes dédiées aux achats standards ou à la reprise de matériel.
+- **Approvisionnements anticipés** : pour préparer et suivre le matériel commandé en avance.
+- **Chiffrage** : une liste de références de travail, importable ensuite dans les listes d’approvisionnement.
+- **Listes personnalisées** : créez les listes nécessaires à l’organisation de votre affaire.
 
-1. **Cloner le dépôt ou ouvrir le dossier du projet :**
-   ```bash
-   cd "d:/App en dev/Liste"
-   ```
+Les doublons sont regroupés dans la vue globale et leurs quantités sont additionnées, pour disposer d’un besoin réel et fiable à l’échelle de l’affaire.
 
-2. **Installer les dépendances :**
-   ```bash
-   npm install
-   ```
+---
 
-3. **Lancer le serveur de développement Electron :**
-   ```bash
-   npm run dev
-   ```
+## Saisir et fiabiliser les références
 
-4. **Lancer le linter pour vérifier la qualité du code :**
-   ```bash
-   npm run lint
-   ```
+- Ajouter des références manuellement dans une liste éditable.
+- Rechercher une référence instantanément.
+- Modifier une référence ou sa quantité sans quitter la liste.
+- Augmenter rapidement une quantité, unité par unité ou avec une valeur personnalisée.
+- Supprimer une ligne ou nettoyer en une fois les lignes dont la quantité est à zéro.
+- Fusionner des références lorsque nécessaire, y compris lorsqu’elles sont liées à un plan.
+- Choisir une densité d’affichage adaptée : plus compacte pour travailler vite, plus aérée pour relire confortablement.
+- Utiliser des raccourcis clavier, personnalisables dans l’application, pour les actions fréquentes.
+
+---
+
+## Préparer les achats avec une vue dédiée
+
+L’**État préparatoire** compare les besoins de l’affaire avec les listes d’achat et les approvisionnements anticipés.
+
+Pour chaque référence, il indique clairement :
+
+- **À commander** : aucune quantité n’est encore commandée.
+- **Partiellement commandé** : une partie du besoin est déjà couverte.
+- **Commandé** : la quantité requise est entièrement couverte.
+
+Les lignes totalement commandées sont visuellement distinguées afin de concentrer l’attention sur les références encore à traiter. Cette vue permet de piloter les restes à commander sans recalcul manuel.
+
+---
+
+## Importer des nomenclatures Excel
+
+- Importer un ou plusieurs fichiers Excel dans la liste de votre choix.
+- Choisir la feuille Excel à lire.
+- Indiquer la ligne à partir de laquelle commencent les données.
+- Associer simplement les colonnes de référence et de quantité à importer.
+- Ajouter les quantités importées aux références déjà présentes plutôt que de perdre les données existantes.
+- Importer les références de la liste **Chiffrage** dans une autre liste avec une quantité initiale de zéro.
+- Être averti lorsque certaines références ne peuvent pas être importées, par exemple parce qu’elles sont déjà pilotées depuis un plan.
+
+---
+
+## Trier, filtrer et retrouver l’information
+
+- Rechercher une référence dans la vue en cours en un instant.
+- Trier naturellement les références, pour respecter la lecture humaine des codes techniques : `750-8` passe avant `750-10`.
+- Trier par fabricant puis par référence.
+- Trier selon la date d’ajout.
+- Dans l’État préparatoire, classer les références par priorité d’achat : à commander, partiellement commandé, puis commandé.
+
+Les exports restent structurés selon un ordre cohérent fabricant → référence, indépendamment de l’ordre de travail affiché à l’écran.
+
+---
+
+## Exploiter les plans PDF
+
+- Attacher un plan PDF à une liste compatible.
+- Visualiser le plan dans une fenêtre dédiée.
+- Poser des repères sur le plan pour relier visuellement les références aux emplacements concernés.
+- Sélectionner, déplacer ou supprimer les repères au fil de la préparation.
+- Annuler ou rétablir les actions réalisées sur le plan.
+- Réutiliser un plan déjà enregistré dans la même affaire.
+- Remplacer, recoller, détacher ou supprimer un plan selon son évolution.
+- Verrouiller les quantités pilotées par les repères du plan afin d’éviter les incohérences de saisie.
+
+Le contenu du PDF reste intact : seuls les repères ajoutés dans l’application complètent la lecture du document.
+
+---
+
+## Maintenir un catalogue de références partagé
+
+Le catalogue centralise les informations utiles à la saisie des nomenclatures :
+
+- Références.
+- Fabricants.
+- Types d’appareils.
+- Filiales.
+
+Il est possible de rechercher, ajouter, modifier ou supprimer ces éléments depuis l’administration du catalogue. Un import Excel permet également d’alimenter le catalogue à partir d’un fichier existant, avec aperçu et association des colonnes avant validation.
+
+---
+
+## Produire des exports prêts à transmettre
+
+Chaque vue utile peut être exportée pour les achats, les ateliers ou le suivi d’affaire :
+
+- **PDF** : une feuille lisible et structurée, avec les informations de l’affaire, les quantités et l’état d’avancement des commandes.
+- **Excel** : un fichier exploitable pour un traitement complémentaire, un ERP ou un service achats.
+
+Les documents exportés utilisent un nom de fichier construit à partir des informations de l’affaire et de la liste, ce qui facilite le classement et la transmission.
+
+---
+
+## Une interface pensée pour le quotidien
+
+- Thème **clair**, **sombre** ou **automatique** selon le réglage du système.
+- Préférence de thème conservée au prochain lancement.
+- Thème homogène dans l’accueil, les affaires, le catalogue, les boîtes de dialogue et la fenêtre Plan.
+- Messages de confirmation avant les actions irréversibles.
+- Actions principales clairement mises en avant et actions destructives signalées visuellement.
+- Mise à jour de l’application détectée automatiquement, téléchargée en arrière-plan et installable au redémarrage.
+
+---
+
+## En bref
+
+Liste apporte dans un seul outil ce dont une affaire a besoin pour passer d’une nomenclature brute à un approvisionnement maîtrisé : **consolider**, **préparer**, **suivre**, **annoter les plans** et **exporter**.

@@ -200,12 +200,15 @@ export type ProjectFileData = {
   markers: Marker[];
 };
 
+export type ThemePreference = 'light' | 'dark' | 'auto';
+
 export type AppConfig = {
   dbFilePath?: string;
   recentFiles?: Array<{ id: string; path: string; tech: string; nomAffaire?: string; nomTableau?: string; lastOpened: number }>;
   defaultTechName?: string;
   shortcutBindings?: Partial<ShortcutBindings>;
   listViewPreferences?: Partial<ListViewPreferences>;
+  theme?: ThemePreference;
 };
 
 export type CatalogImportMapping = {
@@ -231,6 +234,7 @@ export type ElectronApi = {
   exportPdfAuto: (listFilePath: string, filename: string, base64Data: string) => Promise<{ success: boolean; filePath?: string; error?: string; cancelled?: boolean }>;
   saveConfig: (config: Partial<AppConfig>) => Promise<void>;
   loadConfig: () => Promise<AppConfig | null>;
+  onThemeChanged: (callback: (theme: ThemePreference) => void) => () => void;
   verifyAdminPassword: (password: string) => Promise<boolean>;
   updateAdminPassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
   previewExcelCatalog: () => Promise<{ success: boolean; filePath?: string; schema?: Record<string, { id: string; label: string }[]>; error?: string }>;
@@ -238,6 +242,7 @@ export type ElectronApi = {
   getPaginatedReferences: (page: number, pageSize: number, search: string) => Promise<{ items: ComponentRef[]; total: number }>;
   addReference: (data: Omit<ComponentRef, 'weight'> & { weight?: number }) => Promise<{ success: boolean; error?: string }>;
   updateReference: (oldRef: string, data: Omit<ComponentRef, 'weight'> & { weight?: number }) => Promise<{ success: boolean; error?: string }>;
+  assignReferenceType: (refs: string[], typeId: number) => Promise<{ success: boolean; updated?: number; error?: string }>;
   deleteReference: (ref: string) => Promise<{ success: boolean; error?: string }>;
   addManufacturer: (data: Manufacturer) => Promise<{ success: boolean; error?: string }>;
   updateManufacturer: (oldCode: string, data: Manufacturer) => Promise<{ success: boolean; error?: string }>;

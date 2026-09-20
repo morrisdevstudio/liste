@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { ElectronApi } from '../src/types';
+import type { ElectronApi, ThemePreference } from '../src/types';
 
 const electronAPI: ElectronApi = {
   getManufacturers: () => ipcRenderer.invoke('get-manufacturers'),
@@ -20,6 +20,11 @@ const electronAPI: ElectronApi = {
   exportPdfAuto: (listFilePath: string, filename: string, base64Data: string) => ipcRenderer.invoke('export-pdf-auto', listFilePath, filename, base64Data),
   saveConfig: (config) => ipcRenderer.invoke('save-config', config),
   loadConfig: () => ipcRenderer.invoke('load-config'),
+  onThemeChanged: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, theme: ThemePreference) => callback(theme);
+    ipcRenderer.on('theme-changed', listener);
+    return () => ipcRenderer.removeListener('theme-changed', listener);
+  },
   verifyAdminPassword: (password: string) => ipcRenderer.invoke('verify-admin-password', password),
   updateAdminPassword: (newPassword: string) => ipcRenderer.invoke('update-admin-password', newPassword),
   
@@ -29,6 +34,7 @@ const electronAPI: ElectronApi = {
   getPaginatedReferences: (page: number, pageSize: number, search: string) => ipcRenderer.invoke('get-paginated-references', page, pageSize, search),
   addReference: (data) => ipcRenderer.invoke('add-reference', data),
   updateReference: (oldRef, data) => ipcRenderer.invoke('update-reference', oldRef, data),
+  assignReferenceType: (refs: string[], typeId: number) => ipcRenderer.invoke('assign-reference-type', refs, typeId),
   deleteReference: (ref: string) => ipcRenderer.invoke('delete-reference', ref),
   addManufacturer: (data) => ipcRenderer.invoke('add-manufacturer', data),
   updateManufacturer: (oldCode, data) => ipcRenderer.invoke('update-manufacturer', oldCode, data),

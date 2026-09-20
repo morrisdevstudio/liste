@@ -3,6 +3,7 @@ import { Search, Database, Plus, Edit2, Trash2, ArrowLeft, UploadCloud, ChevronL
 import { ComponentRef, Manufacturer, Filiale, ComponentType } from '../types';
 import { NEUTRAL_TYPE_COLOR, normalizeHexColor } from '../componentTypes';
 import { useStore } from '../store/useStore';
+import { AppSettingsMenu } from './ThemeToggle';
 
 interface CatalogAdminProps {
   onBack: () => void;
@@ -19,6 +20,8 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
   const [refSearch, setRefSearch] = useState('');
   const [refPage, setRefPage] = useState(1);
   const [refTotal, setRefTotal] = useState(0);
+  const [selectedRefs, setSelectedRefs] = useState<Set<string>>(new Set());
+  const [selectedTypeId, setSelectedTypeId] = useState('');
   const refPageSize = 50;
 
   // Manufacturers State
@@ -102,6 +105,7 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
       const data = await window.electronAPI.getPaginatedReferences(refPage, refPageSize, refSearch);
       setRefs(data.items);
       setRefTotal(data.total);
+      setSelectedRefs(new Set());
     } catch (e) {
       console.error(e);
     } finally {
@@ -223,6 +227,49 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
 
   const handleDeleteRef = (ref: string) => {
     setDeleteConfirm({ type: 'ref', id: ref });
+  };
+
+  const toggleReferenceSelection = (ref: string) => {
+    setSelectedRefs((previous) => {
+      const next = new Set(previous);
+      if (next.has(ref)) next.delete(ref);
+      else next.add(ref);
+      return next;
+    });
+  };
+
+  const toggleVisibleReferences = () => {
+    const visibleRefs = refs.map((ref) => ref.ref);
+    const allVisibleSelected = visibleRefs.length > 0 && visibleRefs.every((ref) => selectedRefs.has(ref));
+    setSelectedRefs((previous) => {
+      const next = new Set(previous);
+      for (const ref of visibleRefs) {
+        if (allVisibleSelected) next.delete(ref);
+        else next.add(ref);
+      }
+      return next;
+    });
+  };
+
+  const handleAssignType = async () => {
+    if (!window.electronAPI || selectedRefs.size === 0 || !selectedTypeId) return;
+    setLoading(true);
+    try {
+      const result = await window.electronAPI.assignReferenceType([...selectedRefs], Number(selectedTypeId));
+      if (result.success) {
+        setSelectedRefs(new Set());
+        setSelectedTypeId('');
+        await refreshCatalogs();
+        await fetchReferences();
+      } else {
+        setErrorMsg(`Erreur : ${result.error}`);
+      }
+    } catch (error) {
+      console.error(error);
+      setErrorMsg('Erreur inattendue.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const executeDeleteRef = async (ref: string) => {
@@ -399,7 +446,7 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
           </button>
           <div>
             <h1 className="text-xl font-bold text-slate-800 flex items-center">
-              <Database className="w-5 h-5 mr-2 text-blue-600" />
+              <Database className="w-5 h-5 mr-2 text-slate-700 dark:text-charte-jaune" />
               Administration du Catalogue
             </h1>
             <p className="text-sm text-slate-500">Gérez vos références, types d'appareils et fabricants</p>
@@ -407,6 +454,7 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
         </div>
 
         <div className="flex items-center gap-4">
+          <AppSettingsMenu showLabel={false} panelAlign="right" panelSide="below" buttonClassName="btn-charte btn-charte-secondaire" />
           <button
             onClick={() => isUnlocked ? setIsUnlocked(false) : requireUnlock(() => {})}
             className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg shadow-sm transition-colors ${
@@ -449,7 +497,7 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
           {isUnlocked && (
             <button
               onClick={() => requireUnlock(handlePreviewExcel)}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg flex items-center font-medium shadow-sm transition-colors"
+              className="btn-charte btn-charte-jaune"
             >
               <UploadCloud className="w-4 h-4 mr-2" />
               Importer
@@ -527,16 +575,38 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
                 className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow bg-white"
               />
             </div>
-            {/* Add Button */}
-            {isUnlocked && (
-              <button 
-                onClick={() => requireUnlock(() => handleOpenItemModal('add'))}
-                className="flex items-center text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-lg transition-colors"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Ajouter
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {isUnlocked && activeTab === 'references' && selectedRefs.size > 0 && (
+                <>
+                  <span className="text-sm font-medium text-slate-600">{selectedRefs.size} sélectionnée{selectedRefs.size > 1 ? 's' : ''}</span>
+                  <select
+                    value={selectedTypeId}
+                    onChange={(event) => setSelectedTypeId(event.target.value)}
+                    className="border border-slate-200 rounded-lg bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    aria-label="Type à appliquer"
+                  >
+                    <option value="">Appliquer un type...</option>
+                    {componentTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
+                  </select>
+                  <button
+                    onClick={() => requireUnlock(handleAssignType)}
+                    disabled={!selectedTypeId}
+                    className="btn-charte btn-charte-jaune disabled:opacity-50"
+                  >
+                    Appliquer
+                  </button>
+                </>
+              )}
+              {isUnlocked && (
+                <button
+                  onClick={() => requireUnlock(() => handleOpenItemModal('add'))}
+                  className="btn-charte btn-charte-jaune"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Ajouter
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Table Container */}
@@ -551,6 +621,17 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
                 <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 shadow-sm z-10">
                   {activeTab === 'references' ? (
                     <tr>
+                      {isUnlocked && (
+                        <th className="w-12 py-3 px-4">
+                          <input
+                            type="checkbox"
+                            checked={refs.length > 0 && refs.every((ref) => selectedRefs.has(ref.ref))}
+                            onChange={toggleVisibleReferences}
+                            aria-label="Sélectionner toutes les références visibles"
+                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          />
+                        </th>
+                      )}
                       <th className="py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Référence</th>
                       <th className="py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Désignation</th>
                       <th className="py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Code Fab.</th>
@@ -582,6 +663,17 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
                     refs.length > 0 ? (
                       refs.map(r => (
                         <tr key={r.ref} className="hover:bg-slate-50 transition-colors group">
+                          {isUnlocked && (
+                            <td className="py-3 px-4">
+                              <input
+                                type="checkbox"
+                                checked={selectedRefs.has(r.ref)}
+                                onChange={() => toggleReferenceSelection(r.ref)}
+                                aria-label={`Sélectionner ${r.ref}`}
+                                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                              />
+                            </td>
+                          )}
                           <td className="py-3 px-6 font-mono text-sm text-slate-800">{r.ref}</td>
                           <td className="py-3 px-6 text-sm text-slate-600">{r.designation}</td>
                           <td className="py-3 px-6 text-sm text-slate-500">{r.fabCode}</td>
@@ -607,7 +699,7 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
                         </tr>
                       ))
                     ) : (
-                      <tr><td colSpan={isUnlocked ? 6 : 5} className="py-8 text-center text-slate-500">Aucune référence trouvée.</td></tr>
+                      <tr><td colSpan={isUnlocked ? 7 : 5} className="py-8 text-center text-slate-500">Aucune référence trouvée.</td></tr>
                     )
                   ) : activeTab === 'manufacturers' ? (
                     filteredManufacturers.length > 0 ? (
@@ -896,7 +988,7 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
                   (mapping.references.sheet && (!mapping.references.ref || !mapping.references.designation || !mapping.references.fabCode)) ||
                   (!mapping.manufacturers.sheet && !mapping.references.sheet)
                 }
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium flex items-center shadow-md transition-all disabled:opacity-50 disabled:hover:bg-blue-600"
+                className="btn-charte btn-charte-jaune disabled:opacity-50"
               >
                 {importing ? (
                   <span className="animate-pulse">Importation...</span>
@@ -1040,7 +1132,7 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
               <button
                 onClick={handleSaveItem}
                 disabled={loading || (activeTab === 'references' ? (!formData.ref || !formData.designation || !formData.fabCode) : activeTab === 'manufacturers' ? (!formData.code || !formData.name) : activeTab === 'types' ? (!formData.name || !formData.color) : !formData.name)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium shadow-sm transition-colors disabled:opacity-50"
+                className="btn-charte btn-charte-jaune disabled:opacity-50"
               >
                 {loading ? 'Enregistrement...' : 'Enregistrer'}
               </button>
@@ -1070,7 +1162,7 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
                   else executeDeleteFiliale(deleteConfirm.id as number);
                   setDeleteConfirm(null);
                 }}
-                className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-medium shadow-sm transition-colors"
+                className="btn-charte btn-charte-rouge"
               >
                 Supprimer
               </button>
@@ -1114,7 +1206,7 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
                 </button>
                 <button
                   type="submit"
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors"
+                  className="btn-charte btn-charte-jaune"
                 >
                   Valider
                 </button>
