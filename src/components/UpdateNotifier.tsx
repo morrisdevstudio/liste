@@ -128,7 +128,7 @@ export function UpdateNotifier() {
               className="flex items-center justify-center px-4 py-1.5 rounded-sm shadow-sm text-xs font-bold text-slate-900 bg-charte-jaune hover:bg-charte-jaune-hover transition-colors flex-row gap-1.5"
             >
               <RefreshCw className="w-3.5 h-3.5" />
-              Redémarrer et Installer
+              Mettre à jour et redémarrer
             </button>
           )}
           

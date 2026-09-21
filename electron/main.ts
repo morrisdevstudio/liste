@@ -386,7 +386,7 @@ ipcMain.handle('check-for-updates', () => {
 });
 
 ipcMain.handle('quit-and-install', () => {
-  autoUpdater.quitAndInstall();
+  autoUpdater.quitAndInstall(true, true);
 });
 
 app.on('window-all-closed', () => {
