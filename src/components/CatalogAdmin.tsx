@@ -3,7 +3,6 @@ import { Search, Database, Plus, Edit2, Trash2, ArrowLeft, UploadCloud, ChevronL
 import { ComponentRef, Manufacturer, Filiale, ComponentType } from '../types';
 import { NEUTRAL_TYPE_COLOR, normalizeHexColor } from '../componentTypes';
 import { useStore } from '../store/useStore';
-import { AppSettingsMenu } from './ThemeToggle';
 
 interface CatalogAdminProps {
   onBack: () => void;
@@ -454,7 +453,6 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
         </div>
 
         <div className="flex items-center gap-4">
-          <AppSettingsMenu showLabel={false} panelAlign="right" panelSide="below" buttonClassName="btn-charte btn-charte-secondaire" />
           <button
             onClick={() => isUnlocked ? setIsUnlocked(false) : requireUnlock(() => {})}
             className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg shadow-sm transition-colors ${

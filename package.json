@@ -1,7 +1,7 @@
 {
   "name": "liste-app",
   "private": true,
-  "version": "1.0.13",
+  "version": "1.0.14",
   "repository": {
     "type": "git",
     "url": "https://github.com/morrisdevstudio/liste.git"

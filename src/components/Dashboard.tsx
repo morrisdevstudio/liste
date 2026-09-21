@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
 import { Plus, FolderOpen, Database, Clock, Edit2, Check, X, User } from 'lucide-react';
 import { ProjectSettingsModal } from './ProjectSettingsModal';
-import { AppSettingsMenu } from './ThemeToggle';
+import { ThemeToggle } from './ThemeToggle';
 import { Project } from '../types';
 
 interface DashboardProps {
@@ -33,12 +33,14 @@ export function Dashboard({ onOpenAdmin }: DashboardProps) {
   };
 
   return (
-    <div className="w-full h-full overflow-auto">
+    <div className="relative w-full h-full overflow-auto">
+      <div className="absolute right-4 top-4 z-10 sm:right-8 sm:top-8">
+        <ThemeToggle layout="horizontal" />
+      </div>
       <div className="p-4 sm:p-8 pt-12 sm:pt-20 max-w-4xl mx-auto flex flex-col gap-8">
       
       <div className="text-center mb-8 relative">
          <div className="absolute top-0 right-0 hidden sm:flex items-center gap-3">
-           <AppSettingsMenu panelAlign="right" panelSide="below" />
            {onOpenAdmin && isElectron && (
              <button 
                onClick={onOpenAdmin}
@@ -92,7 +94,6 @@ export function Dashboard({ onOpenAdmin }: DashboardProps) {
       </div>
 
       <div className="sm:hidden flex items-center justify-center gap-3 mb-2">
-        <AppSettingsMenu panelAlign="right" panelSide="below" />
         {onOpenAdmin && isElectron && (
           <button 
             onClick={onOpenAdmin}

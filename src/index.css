@@ -200,6 +200,9 @@ body,
 .dark .btn-charte-rouge * {
   color: #ffffff !important;
 }
+.btn-charte-rouge {
+  background-color: #dc2626;
+}
 .btn-charte-vert,
 .btn-charte-vert:hover,
 .btn-charte-vert *,

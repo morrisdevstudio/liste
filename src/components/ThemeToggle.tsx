@@ -9,11 +9,17 @@ const OPTIONS: { id: ThemePreference; label: string; Icon: typeof Sun }[] = [
   { id: 'auto', label: 'Syst\u00e8me', Icon: Monitor },
 ];
 
-export function ThemeToggle({ onSelect }: { onSelect?: () => void }) {
+export function ThemeToggle({
+  onSelect,
+  layout = 'vertical',
+}: {
+  onSelect?: () => void;
+  layout?: 'vertical' | 'horizontal';
+}) {
   const { preference, setPreference } = useTheme();
 
   return (
-    <div className="space-y-1">
+    <div className={layout === 'horizontal' ? 'flex items-center gap-1 rounded-sm border border-slate-200 bg-white p-1 shadow-sm dark:border-slate-700/50 dark:bg-charte-tuile-sombre' : 'space-y-1'}>
       {OPTIONS.map(({ id, label, Icon }) => {
         const active = preference === id;
         return (
@@ -24,14 +30,16 @@ export function ThemeToggle({ onSelect }: { onSelect?: () => void }) {
               void setPreference(id);
               onSelect?.();
             }}
-            className={`w-full rounded-sm px-2 py-1.5 text-left text-sm flex items-center gap-2 ${
+            title={label}
+            aria-label={`Thème ${label}`}
+            className={`${layout === 'horizontal' ? 'h-9 w-9 justify-center' : 'w-full px-2 py-1.5 text-left gap-2'} rounded-sm text-sm flex items-center ${
               active
                 ? 'bg-slate-100 dark:bg-charte-bg-sombre font-medium text-slate-900 dark:text-charte-jaune'
                 : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-[#252627]'
             }`}
           >
             <Icon className="w-4 h-4 shrink-0" />
-            {label}
+            {layout === 'vertical' && label}
           </button>
         );
       })}
