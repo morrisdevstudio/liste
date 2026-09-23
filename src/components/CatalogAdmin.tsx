@@ -21,7 +21,8 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
   const [refTotal, setRefTotal] = useState(0);
   const [selectedRefs, setSelectedRefs] = useState<Set<string>>(new Set());
   const [selectedTypeId, setSelectedTypeId] = useState('');
-  const refPageSize = 50;
+  const [refPageSize, setRefPageSize] = useState(50);
+  const refPageSizes = [50, 100, 200, 500];
 
   // Manufacturers State
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
@@ -110,7 +111,7 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
     } finally {
       setLoading(false);
     }
-  }, [refPage, refSearch]);
+  }, [refPage, refPageSize, refSearch]);
 
   const fetchManufacturers = useCallback(async () => {
     if (!window.electronAPI) return;
@@ -808,8 +809,26 @@ export const CatalogAdmin: React.FC<CatalogAdminProps> = ({ onBack }) => {
           {/* Pagination Footer (Only for references) */}
           {activeTab === 'references' && (
             <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-sm text-slate-600">
-              <div>
-                Affichage de <span className="font-semibold text-slate-900">{(refPage - 1) * refPageSize + 1}</span> à <span className="font-semibold text-slate-900">{Math.min(refPage * refPageSize, refTotal)}</span> sur <span className="font-semibold text-slate-900">{refTotal}</span> références
+              <div className="flex items-center gap-4">
+                <span>
+                  Affichage de <span className="font-semibold text-slate-900">{refTotal === 0 ? 0 : (refPage - 1) * refPageSize + 1}</span> à <span className="font-semibold text-slate-900">{Math.min(refPage * refPageSize, refTotal)}</span> sur <span className="font-semibold text-slate-900">{refTotal}</span> références
+                </span>
+                <label className="flex items-center gap-2">
+                  <span>Par page</span>
+                  <select
+                    value={refPageSize}
+                    onChange={(event) => {
+                      setRefPageSize(Number(event.target.value));
+                      setRefPage(1);
+                    }}
+                    aria-label="Nombre de références par page"
+                    className="border border-slate-200 rounded-lg bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {refPageSizes.map((size) => (
+                      <option key={size} value={size}>{size}</option>
+                    ))}
+                  </select>
+                </label>
               </div>
 
               <div className="flex items-center space-x-2">
